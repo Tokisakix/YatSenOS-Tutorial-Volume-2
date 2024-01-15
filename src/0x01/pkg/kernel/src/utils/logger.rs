@@ -5,6 +5,7 @@ pub fn init() {
     log::set_logger(&LOGGER).unwrap();
 
     // FIXME: Configure the logger
+    log::set_max_level(log::LevelFilter::Info);
 
     info!("Logger Initialized.");
 }
@@ -17,7 +18,10 @@ impl log::Log for Logger {
     }
 
     fn log(&self, record: &Record) {
-        // FIXME: Implement the logger with serial output
+        // Implement the logger with serial output
+        if self.enabled(record.metadata()) {
+            println!("{} - {}", record.level(), record.args());
+        }
     }
 
     fn flush(&self) {}

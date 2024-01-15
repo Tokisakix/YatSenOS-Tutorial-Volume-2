@@ -3,6 +3,7 @@ ESP := esp
 BUILD_ARGS :=
 QEMU_ARGS := -m 96M
 QEMU_OUTPUT := -nographic
+# QEMU_OUTPUT :=
 MODE ?= release
 CUR_PATH := $(shell pwd)
 DBG_INFO ?= false

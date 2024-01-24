@@ -12,13 +12,14 @@
 
 ## 配置实验环境
 
-我们支持并推荐如下平台进行实验：
+我们推荐在以下环境进行实验：
 
 - Windows 10/11
 - Ubuntu 22.04 LTS
 - Ubuntu 22.04 LTS on WSL 2
 - macOS with Apple Silicon
-- 其他可行的平台，但我们不提供技术支持。如 Debian、Fedora、Kali Linux、Arch Linux 等。
+
+以上环境经过我们的测试和验证，可以正常进行实验。对于其他常用的 Linux 发行版，通常也可以正常进行实验，但我们不提供技术支持。
 
 ### 安装项目开发环境
 
@@ -39,9 +40,13 @@
 
 ## 尝试使用 Rust 进行编程
 
-我们预留了一些 Rust 编程任务，请你学习 Rust 并尝试在 Linux 环境下实现他们。
+我们预留了一些 Rust 编程任务，请你学习 Rust 并尝试在 Linux 环境下实现它们。
 
-!!! tip "在你不熟悉新语言的时候，我们非常推荐你借助 LLM 进行学习。"
+!!! tip "编程提示"
+
+    - 如果代码格式不确定或写法不明确，记得常用 `cargo fmt` 和 `cargo clippy`。
+    - 在你不熟悉新语言的时候，我们非常推荐你借助 LLM 进行学习。
+    - 在满足题目描述的情况下，如有需要，**参数类型和返回值类型可以自行选择和修改**。
 
 1. 使用 Rust 编写一个程序，完成以下任务：
 
@@ -57,17 +62,23 @@
 
         函数应该尝试读取并输出文件的内容。如果文件不存在，函数应该使用 `expect` 方法主动 panic，并输出 `File not found!`。
 
+        !!! tip "尝试使用 `io::Result<()>` 作为返回值，并使用 `?` 将错误向上传递。"
+
     3. 创建一个函数 `file_size(file_path: &str) -> Result<u64, &str>`
 
         该函数接收一个字符串参数，表示文件的路径，并返回一个 `Result`。
 
         函数应该尝试打开文件，并在 `Result` 中返回文件大小。如果文件不存在，函数应该返回一个包含 `File not found!` 字符串的 Err。
 
+        !!! tip "尝试将 `std::io::Result` 转换为 `std::Result`，你可能需要 `map_err` 等函数。"
+
     4. 在 `main` 函数中，按照如下顺序调用上述函数：
 
         - 首先调用 `count_down(5)` 函数进行倒计时
         - 然后调用 `read_and_print("/etc/hosts")` 函数尝试读取并输出文件内容
         - 最后使用 `std::io` 获取几个用户输入的路径，并调用 `file_size` 函数尝试获取文件大小，并处理可能的错误。
+
+        !!! tip "`main` 函数的返回值可以是 `Result`，参考文档看看它能做什么？"
 
     注意：在处理文件操作时，需要使用到 Rust 的文件处理相关库，如 `std::fs` 和 `std::io`。在处理错误时，需要使用到 Rust 的错误处理机制，如 `expect` 和 `unwrap` 等。
 
@@ -183,17 +194,11 @@
     $ git clone https://github.com/YatSenOS/YatSenOS-Tutorial-Volume-2
     ```
 
-2. 参考[实验 0x00 参考代码](https://github.com/YatSenOS/YatSenOS-Tutorial-Volume-2/tree/main/src/0x00/)的文件结构，初始化你的仓库。
+2. 参考[实验 0x00 代码](https://github.com/YatSenOS/YatSenOS-Tutorial-Volume-2/tree/main/src/0x00/)的文件结构，初始化你的仓库。
 
-    选择一个合适的目录，并拷贝此文件夹的内容到你的仓库中：
+    选择一个合适的目录，复制 `YatSenOS-Tutorial-Volume-2/src/0x00` 中的内容到目录中。
 
-    !!! warning "不要直接运行如下代码，选择自己的工作文件夹，Windows 环境请注意命令和路径的格式"
-
-    ```bash
-    $ cp -Lr YatSenOS-Tutorial-Volume-2/src/0x00 /path/to/your/workdir
-    ```
-
-    !!! note "我们使用 `/path/to/your/workdir` 指代你的工作区，**请将其替换为你的工作区路径**"
+    !!! tip "网络不好的情况下可以尝试直接下载代码 zip 压缩包"
 
 3. 初始化你的仓库：
 
@@ -219,6 +224,8 @@
     ysos.py
     ```
 
+    !!! note "请注意根 git 根目录下应当存在 `Cargo.toml` 等文件，而不是 `0x00` 文件夹"
+
 ### 使用 QEMU 启动 UEFI Shell
 
 UEFI Shell 是一个基于 UEFI 的命令行工具，它可以让我们在 UEFI 环境下进行一些简单的操作。
@@ -238,6 +245,9 @@ qemu-system-x86_64 -bios ./assets/OVMF.fd -net none -nographic
 在预期下将会看到如下输出：
 
 ```log
+BdsDxe: failed to load Boot0001 "UEFI QEMU DVD-ROM QM00003 " from ...: Not Found
+BdsDxe: loading Boot0002 "EFI Internal Shell" from ...
+BdsDxe: starting Boot0002 "EFI Internal Shell" from ...
 UEFI Interactive Shell v2.2
 EDK II
 UEFI v2.70 (EDK II, 0x00010000)
@@ -249,6 +259,10 @@ Shell>
 ```
 
 !!! tip "使用 <kbd>Ctrl</kbd> + <kbd>A</kbd> 后输入 <kbd>X</kbd> 可以退出 QEMU"
+
+!!! note "你是否尝试过更改自己的电脑的启动项（启动顺序）？"
+
+    这里以 `BdsDxe` 开头的信息是 UEFI 正在尝试从 `DVD-ROM` 启动，但是没有找到可启动项，因此启动了 `EFI Internal Shell`。我们并没有给 QEMU 提供任何光盘设备挂载，因此这是预期的行为。
 
 ## YSOS 启动！
 
@@ -340,15 +354,20 @@ fn efi_main(image: uefi::Handle, mut system_table: SystemTable<Boot>) -> Status 
 在项目根目录下运行 `make run` 或 `python ysos.py run`，预期得到如下输出：
 
 ```bash
+BdsDxe: failed to load Boot0001 "UEFI QEMU DVD-ROM QM00003 " from ...: Not Found
+BdsDxe: loading Boot0002 "UEFI QEMU HARDDISK QM00001 " from ...
+BdsDxe: starting Boot0002 "UEFI QEMU HARDDISK QM00001 " from ...
 [ INFO]: pkg/boot/src/main.rs@017: Hello World from UEFI bootloader!
 [ INFO]: pkg/boot/src/main.rs@017: Hello World from UEFI bootloader!
 ```
+
+!!! note "与上述同理，这里 UEFI 尝试从磁盘启动，并成功加载运行刚刚编译出的引导程序。"
 
 至此，你已经做好了编写 OS 的准备工作。
 
 ## 思考题
 
-1. 了解现代操作系统（Windows）的启动过程，`legacy BIOS` 和 `UEFI` 的区别是什么？
+1. 了解现代操作系统（Windows）的启动过程，`UEFI` 和 `Legacy`（`BIOS`）的区别是什么？
 
 2. 尝试解释 Makefile 中的命令做了哪些事情？或许你可以参考下列命令来得到更易读的解释：
 
@@ -367,7 +386,7 @@ fn efi_main(image: uefi::Handle, mut system_table: SystemTable<Boot>) -> Status 
 2. 🤔 基于第一个 Rust 编程题目，实现一个简单的 shell 程序：
 
     - 实现 `cd` 命令，可以切换当前工作目录（可以不用检查路径是否存在）
-    - 实现 `ls` 命令，尝试列出当前工作目录下的文件和文件夹，以及他们的一些信息
+    - 实现 `ls` 命令，尝试列出当前工作目录下的文件和文件夹，以及有关的信息（如文件大小、创建时间等）
     - 实现 `cat` 命令，输出某个文件的内容
 
     !!! question "路径的切换是很容易出现问题的操作，你的程序能正常处理 `cd ../../././../a/b/c/../.././d/` 吗？"

@@ -22,15 +22,11 @@
 
     为了帮助大家进行项目代码的结构组织，本次实验给出的参考代码中包含了**完整的文件结构**。
 
-    这意味着你可以**直接使用本次实验的[参考代码](https://github.com/YatSenOS/YatSenOS-Tutorial-Volume-2/tree/main/src/0x01/)**进行实验，而不需要从头开始编写项目结构。
+    这意味着你可以**直接使用本次实验的[参考代码](https://github.com/YatSenOS/YatSenOS-Tutorial-Volume-2/tree/main/src/0x01/)** （路径为 `YatSenOS-Tutorial-Volume-2/src/0x01`）进行实验，而不需要从头开始编写项目结构。
 
-    请注意结合 Lab 0 的要求，将代码**复制到你自己的仓库**中进行实验，而不是在本仓库中进行。
+    请将代码**复制到你自己的仓库中并替换重复文件以进行实验**，而不是在本仓库中进行。
 
-    请注意本次实验中的 `Makefile` 和 `ysos.py` 均有更新。
-
-    ```bash
-    $ cp -Lr YatSenOS-Tutorial-Volume-2/src/0x01 /path/to/your/workdir
-    ```
+    请注意本次实验中的 `Makefile` 和 `ysos.py` 均有更新，并注意保留 `assets/OVMF.fd` 文件。
 
 在 `pkg/kernel/config` 中，引用了 `config/x86_64-unknown-none.json` 的编译目标配置，该配置文件如下所示：
 
@@ -179,7 +175,6 @@ unsafe {
 
 ### 调试内核
 
-
 依据[调试教程](../../wiki/debug.md)的相关内容，搭建基于命令行的 GDB 调试环境。
 
 作为实验的推荐调试环境，你需要配置好 `gef` 插件以进行更加灵活的二进制调试。同时利用 VSCode 进行调试也是一个不错的选择，鼓励你进行尝试，它将会作为实验的加分项目之一。
@@ -249,6 +244,26 @@ pub fn init() {
 
 guard_access_fn!(pub get_serial(SERIAL: SerialPort));
 ```
+
+!!! tip "更好的写法？"
+
+    你可以尝试使用常量泛型（Const Generics）来实现对于不同端口的定义：
+
+    ```rs
+    pub struct SerialPort<const BASE_ADDR: u16> {
+        // ...
+    }
+
+    impl<const BASE_ADDR: u16> SerialPort<BASE_ADDR> {
+        pub const unsafe fn new() -> Self {
+            Self {
+                // use BASE_ADDR here
+            }
+        }
+    }
+    ```
+
+    这样定义之后，你还需要适当修改上述 `serial.rs` 文件中的代码，以便使用这一泛型结构体。
 
 #### 被保护的全局静态对象
 

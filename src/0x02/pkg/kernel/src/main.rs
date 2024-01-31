@@ -13,12 +13,17 @@ pub fn kernel_main(boot_info: &'static boot::BootInfo) -> ! {
     ysos::init(boot_info);
 
     loop {
-        info!("Hello World from YatSenOS v2!");
+        ysos::print!("> ");
+        let input = ysos::input::get_line();
 
-        for _ in 0..0x10000000 {
-            unsafe {
-                asm!("nop");
+        match input.trim() {
+            "exit" => break,
+            _ => {
+                ysos::println!("You said: {}", input);
+                ysos::println!("The counter value is {}", ysos::interrupt::clock::read_counter());
             }
         }
     }
+
+    ysos::shutdown(boot_info);
 }

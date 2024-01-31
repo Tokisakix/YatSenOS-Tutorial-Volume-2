@@ -1,3 +1,4 @@
+
 use lazy_static::lazy_static;
 use x86_64::registers::segmentation::Segment;
 use x86_64::structures::gdt::{Descriptor, GlobalDescriptorTable, SegmentSelector};
@@ -6,7 +7,7 @@ use x86_64::VirtAddr;
 
 pub const DOUBLE_FAULT_IST_INDEX: u16 = 0;
 pub const PAGE_FAULT_IST_INDEX: u16 = 1;
-
+pub const CONTEXT_SWITCH_IST_INDEX: u16 = 0;
 pub const IST_SIZES: [usize; 3] = [0x1000, 0x1000, 0x1000];
 
 lazy_static! {

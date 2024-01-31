@@ -28,6 +28,7 @@ pub use drivers::*;
 
 pub mod memory;
 pub mod interrupt;
+pub mod proc;
 
 pub use alloc::format;
 use boot::BootInfo;
@@ -41,6 +42,7 @@ pub fn init(boot_info: &'static BootInfo) {
     interrupt::init(); // init interrupts
     memory::init(boot_info); // init memory manager
     input::init(); // init input buffer
+    proc::init(); // init ProcessManager
 
     x86_64::instructions::interrupts::enable();
     info!("Interrupts Enabled.");

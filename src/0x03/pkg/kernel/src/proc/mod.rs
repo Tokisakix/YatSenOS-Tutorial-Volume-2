@@ -1,6 +1,6 @@
 mod context;
 mod data;
-mod manager;
+pub mod manager;
 mod paging;
 mod pid;
 mod process;
@@ -34,7 +34,7 @@ pub const STACK_INIT_TOP: u64 = STACK_MAX - 8;
 // [bot..0xffffff0100000000..top..0xffffff01ffffffff]
 // kernel stack
 pub const KSTACK_MAX: u64 = 0xffff_ff02_0000_0000;
-pub const KSTACK_DEF_PAGE: u64 = /* FIXME: decide on the boot config */;
+pub const KSTACK_DEF_PAGE: u64 = 8;
 pub const KSTACK_DEF_SIZE: u64 = KSTACK_DEF_PAGE * PAGE_SIZE;
 pub const KSTACK_INIT_BOT: u64 = KSTACK_MAX - KSTACK_DEF_SIZE;
 pub const KSTACK_INIT_TOP: u64 = KSTACK_MAX - 8;
@@ -53,12 +53,18 @@ pub enum ProgramStatus {
 pub fn init() {
     let mut kproc_data = ProcessData::new();
 
-    // FIXME: set the kernel stack
-
+    // set the kernel stack
+    kproc_data.set_stack(VirtAddr::new(KSTACK_INIT_BOT), KSTACK_DEF_PAGE);
     trace!("Init process data: {:#?}", kproc_data);
 
     // kernel process
-    let kproc = { /* FIXME: create kernel process */ };
+    let kproc = Process::new(
+        String::from("kernel"),
+        None,
+        PageTableContext::new(),
+        Some(kproc_data),
+    );
+    kproc.write().resume();
     manager::init(kproc);
 
     info!("Process Manager Initialized.");
@@ -66,7 +72,10 @@ pub fn init() {
 
 pub fn switch(context: &mut ProcessContext) {
     x86_64::instructions::interrupts::without_interrupts(|| {
-        // FIXME: switch to the next process
+        // switch to the next process
+        let manager = get_process_manager();
+        manager.save_current(context);
+        manager.switch_next(context);
     });
 }
 
@@ -85,7 +94,8 @@ pub fn print_process_list() {
 
 pub fn env(key: &str) -> Option<String> {
     x86_64::instructions::interrupts::without_interrupts(|| {
-        // FIXME: get current process's environment variable
+        // get current process's environment variable
+        get_process_manager().current().read().env(key)
     })
 }
 

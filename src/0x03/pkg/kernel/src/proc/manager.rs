@@ -7,15 +7,18 @@ use crate::memory::{
 use alloc::collections::BTreeMap;
 use alloc::{collections::VecDeque, format, sync::Arc};
 use spin::{Mutex, RwLock};
+use x86::current;
 use x86_64::VirtAddr;
 
 pub static PROCESS_MANAGER: spin::Once<ProcessManager> = spin::Once::new();
 
 pub fn init(init: Arc<Process>) {
 
-    // FIXME: set init process as Running
+    // set init process as Running
+    init.write().resume();
 
-    // FIXME: set processor's current pid to init's pid
+    // set processor's current pid to init's pid
+    processor::set_pid(init.pid());
 
     PROCESS_MANAGER.call_once(|| ProcessManager::new(init));
 }
@@ -66,26 +69,53 @@ impl ProcessManager {
             .expect("No current process")
     }
 
+    pub fn wait_pid(&self, pid: ProcessId) -> isize {
+        self.get_proc(&pid)
+            .and_then(|p| p.read().exit_code())
+            .unwrap_or(-1)
+    }
+
     pub fn save_current(&self, context: &ProcessContext) {
-        // FIXME: update current process's tick count
+        // update current process's tick count
+        let bing_current = self.current();
+        let pid = bing_current.pid();
+        let mut current = bing_current.write();
+        current.tick();
 
-        // FIXME: update current process's context
+        // update current process's context
+        current.save(context);
 
-        // FIXME: push current process to ready queue if still alive
+        // push current process to ready queue if still alive
+        self.push_ready(pid);
     }
 
     pub fn switch_next(&self, context: &mut ProcessContext) -> ProcessId {
-
-        // FIXME: fetch the next process from ready queue
-
-        // FIXME: check if the next process is ready,
+        // fetch the next process from ready queue
+        // check if the next process is ready,
         //        continue to fetch if not ready
+        // restore next process's context
+        // update processor's current pid
+        let mut pid = processor::get_pid();
 
-        // FIXME: restore next process's context
+        while let Some(next_pid) = self.ready_queue.lock().pop_front() {
+            let bing_processes = self.processes.read();
+            let proc = bing_processes.get(&next_pid).unwrap();
 
-        // FIXME: update processor's current pid
+            if !proc.read().is_ready() {
+                debug!("Process #{} is {:?}", next_pid, proc.read().status());
+                continue;
+            }
 
-        KERNEL_PID
+            if pid != next_pid {
+                proc.write().restore(context);
+                processor::set_pid(next_pid);
+                pid = next_pid;
+            }
+
+            break;
+        }
+
+        pid
     }
 
     pub fn spawn_kernel_thread(

@@ -13,14 +13,16 @@ pub struct ProcessData {
     pub(super) env: Arc<RwLock<BTreeMap<String, String>>>,
 
     // process specific data
-    pub(super) stack_segment: Option<PageRange>
+    pub(super) stack_segment: Option<PageRange>,
+    pub(super) stack_memory_usage: usize,
 }
 
 impl Default for ProcessData {
     fn default() -> Self {
         Self {
             env: Arc::new(RwLock::new(BTreeMap::new())),
-            stack_segment: None
+            stack_segment: None,
+            stack_memory_usage: 0,
         }
     }
 }
@@ -34,18 +36,19 @@ impl ProcessData {
         self.env.read().get(key).cloned()
     }
 
-    pub fn set_env(&mut self, key: &str, val: &str) {
+    pub fn set_env(self, key: &str, val: &str) -> Self {
         self.env.write().insert(key.into(), val.into());
+        self
     }
 
     pub fn set_stack(&mut self, start: VirtAddr, size: u64) {
         let start = Page::containing_address(start);
         self.stack_segment = Some(Page::range(start, start + size));
+        self.stack_memory_usage = size as usize;
     }
 
     pub fn is_on_stack(&self, addr: VirtAddr) -> bool {
-        // check if the address is on the stack
-        if let Some(stack_range) = self.stack_segment {
+        if let Some(stack_range) = self.stack_segment.as_ref() {
             let addr = addr.as_u64();
             let cur_stack_bot = stack_range.start.start_address().as_u64();
             trace!("Current stack bot: {:#x}", cur_stack_bot);

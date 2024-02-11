@@ -31,7 +31,6 @@ impl PageTableContext {
         }
     }
 
-    /// Create a new page table object based on current page table.
     pub fn clone(&self) -> Self {
         // 1. alloc new page table
         let mut frame_alloc = crate::memory::get_frame_alloc_for_sure();
@@ -58,12 +57,10 @@ impl PageTableContext {
         Arc::strong_count(&self.reg)
     }
 
-    /// Load the page table to Cr3 register.
     pub fn load(&self) {
         unsafe { Cr3::write(self.reg.addr, self.reg.flags) }
     }
 
-    /// Get the page table object by Cr3 register value.
     pub fn mapper(&self) -> OffsetPageTable<'static> {
         unsafe {
             OffsetPageTable::new(

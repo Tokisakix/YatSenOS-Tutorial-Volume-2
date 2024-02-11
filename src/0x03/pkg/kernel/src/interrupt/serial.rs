@@ -1,23 +1,22 @@
+use super::consts;
+use crate::{drivers::serial::get_serial_for_sure, push_key};
 use alloc::vec;
-use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame};
-use crate::{input::push_key, serial::get_serial_for_sure};
 use pc_keyboard::DecodedKey;
-use super::consts::*;
+use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame};
 
-pub unsafe fn register_idt(idt: &mut InterruptDescriptorTable) {
-    idt[Interrupts::IrqBase as usize + Irq::Serial0 as usize]
-        .set_handler_fn(serial_handler);
+pub unsafe fn reg_idt(idt: &mut InterruptDescriptorTable) {
+    idt[consts::Interrupts::IrqBase as usize + consts::Irq::Serial0 as usize]
+        .set_handler_fn(interrupt_handler);
 }
 
-pub extern "x86-interrupt" fn serial_handler(_st: InterruptStackFrame) {
-    receive();
-    super::ack();
+pub fn init() {
+    super::enable_irq(consts::Irq::Serial0 as u8, 0);
+    debug!("Serial0(COM1) IRQ enabled.");
 }
 
 /// Receive character from uart 16550
 /// Should be called on every interrupt
-fn receive() {
-    // receive character from uart 16550, put it into INPUT_BUFFER
+pub fn receive() {
     let mut buf = vec::Vec::with_capacity(4);
     while let Some(scancode) = get_serial_for_sure().receive() {
         match scancode {
@@ -34,4 +33,9 @@ fn receive() {
             }
         }
     }
+}
+
+pub extern "x86-interrupt" fn interrupt_handler(_st: InterruptStackFrame) {
+    super::ack(super::consts::Irq::Serial0 as u8);
+    receive();
 }

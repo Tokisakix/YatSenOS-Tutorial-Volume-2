@@ -1,3 +1,6 @@
+// reference: https://github.com/phil-opp/blog_os/blob/post-09/src/memory.rs
+// reference: https://github.com/xfoxfu/rust-xos/blob/main/kernel/src/memory.rs
+
 use boot::{MemoryMap, MemoryType};
 use x86_64::structures::paging::{FrameAllocator, FrameDeallocator, PhysFrame, Size4KiB};
 use x86_64::PhysAddr;
@@ -19,6 +22,8 @@ pub struct BootInfoFrameAllocator {
 
 impl BootInfoFrameAllocator {
     /// Create a FrameAllocator from the passed memory map.
+    ///
+    /// # Safety
     ///
     /// This function is unsafe because the caller must guarantee that the passed
     /// memory map is valid. The main requirement is that all frames that are marked
@@ -49,7 +54,7 @@ unsafe impl FrameAllocator<Size4KiB> for BootInfoFrameAllocator {
 
 impl FrameDeallocator<Size4KiB> for BootInfoFrameAllocator {
     unsafe fn deallocate_frame(&mut self, _frame: PhysFrame) {
-        // TODO: deallocate frame (not for lab 2)
+        // TODO: deallocate frame
     }
 }
 

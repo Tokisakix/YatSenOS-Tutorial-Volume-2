@@ -3,10 +3,19 @@ ESP := esp
 BUILD_ARGS :=
 QEMU_ARGS := -m 96M
 QEMU_OUTPUT := -nographic
-# QEMU_OUTPUT :=
 MODE ?= release
 CUR_PATH := $(shell pwd)
 DBG_INFO ?= false
+
+# Only add debug info for kernel
+# this is required for VSCode GUI debugging
+ifeq (${DBG_INFO}, true)
+	PROFILE = release-with-debug
+	PROFILE_ARGS = --profile=release-with-debug
+else
+	PROFILE = ${MODE}
+	PROFILE_ARGS = $(BUILD_ARGS)
+endif
 
 # Only add debug info for kernel
 # this is required for VSCode GUI debugging
@@ -72,6 +81,7 @@ $(ESP)/EFI/BOOT/boot.conf: pkg/kernel/config/boot.conf
 $(ESP)/KERNEL.ELF: target/x86_64-unknown-none/$(PROFILE)/ysos_kernel
 	@mkdir -p $(@D)
 	cp $< $@
+
 
 target/x86_64-unknown-uefi/$(MODE)/ysos_boot.efi: pkg/boot
 	cd pkg/boot && cargo build $(BUILD_ARGS)

@@ -1,5 +1,3 @@
-use core::ops::Deref;
-
 use super::ProcessId;
 use super::*;
 use crate::memory::*;
@@ -12,7 +10,6 @@ use x86_64::structures::paging::mapper::MapToError;
 use x86_64::structures::paging::page::PageRange;
 use x86_64::structures::paging::*;
 use x86_64::VirtAddr;
-use xmas_elf::ElfFile;
 
 #[derive(Clone)]
 pub struct Process {
@@ -94,7 +91,7 @@ impl Process {
     }
 
     pub fn alloc_init_stack(&self) -> VirtAddr {
-        // FIXME: alloc init stack base on self pid
+        // stack top set by pid
         let offset = (self.pid.0 - 1) as u64 * STACK_MAX_SIZE;
         let stack_top = STACK_INIT_TOP - offset;
         let stack_bottom = STACT_INIT_BOT - offset;
@@ -148,52 +145,65 @@ impl ProcessInner {
     /// Save the process's context
     /// mark the process as ready
     pub(super) fn save(&mut self, context: &ProcessContext) {
-        // save the process's context
         self.context.save(context);
-        self.status = ProgramStatus::Ready;
+
+        // dead process should not be ready
+        // (kernel thread exit without syscall)
+        if self.status == ProgramStatus::Running {
+            self.status = ProgramStatus::Ready;
+        }
     }
 
     /// Restore the process's context
     /// mark the process as running
     pub(super) fn restore(&mut self, context: &mut ProcessContext) {
-        // restore the process's context
         self.context.restore(context);
-        // restore the process's page table
         self.page_table.as_ref().unwrap().load();
         self.status = ProgramStatus::Running;
+    }
+
+    pub fn init_stack_frame(&mut self, entry: VirtAddr, stack_top: VirtAddr) {
+        self.context.init_stack_frame(entry, stack_top);
     }
 
     pub fn parent(&self) -> Option<Arc<Process>> {
         self.parent.as_ref().and_then(|p| p.upgrade())
     }
 
-    pub fn kill(&mut self, ret: isize) {
-        // set exit code
-        self.exit_code = Some(ret);
+    pub fn try_alloc_new_stack_page(&mut self, addr: VirtAddr) -> Result<(), MapToError<Size4KiB>> {
+        let alloc = &mut *get_frame_alloc_for_sure();
+        let new_start_page = Page::<Size4KiB>::containing_address(addr);
+        let old_stack = self.proc_data.as_ref().unwrap().stack_segment.unwrap();
 
-        // set status to dead
-        self.status = ProgramStatus::Dead;
+        let pages = old_stack.start - new_start_page;
+        let page_table = &mut self.page_table.as_mut().unwrap().mapper();
 
-        // take and drop unused resources
-        self.proc_data.take();
-        self.page_table.take();
-    }
+        trace!(
+            "Fill missing pages...[{:#x} -> {:#x}) ({} pages)",
+            new_start_page.start_address().as_u64(),
+            old_stack.start.start_address().as_u64(),
+            pages
+        );
 
-    pub fn elf_map(&mut self, stack_bottom: u64) {
-        let frame_alloc = &mut *get_frame_alloc_for_sure();
+        elf::map_range(addr.as_u64(), pages, page_table, alloc)?;
 
-        let page_table = self.page_table.as_ref().unwrap();
-        let mut mapper = page_table.mapper();
-
-        let stack_segment =
-            elf::map_range(stack_bottom, STACK_DEF_PAGE, &mut mapper, frame_alloc).unwrap();
+        let new_stack = PageRange {
+            start: new_start_page,
+            end: old_stack.end,
+        };
 
         let proc_data = self.proc_data.as_mut().unwrap();
-        proc_data.stack_segment = Some(stack_segment);
+        proc_data.stack_memory_usage = new_stack.count();
+        proc_data.stack_segment = Some(new_stack);
+
+        Ok(())
     }
 
-    pub fn init_stack_frame(&mut self, entry: VirtAddr, stack_top: VirtAddr) {
-        self.context.init_stack_frame(entry, stack_top)
+    pub fn kill(&mut self, ret: isize) {
+        self.status = ProgramStatus::Dead;
+        self.exit_code = Some(ret);
+        self.proc_data.take();
+        self.page_table.take();
     }
 }
 
@@ -251,8 +261,8 @@ impl core::fmt::Display for Process {
         write!(
             f,
             " #{:-3} | #{:-3} | {:12} | {:7} | {:?}",
-            self.pid.0,
-            inner.parent().map(|p| p.pid.0).unwrap_or(0),
+            u16::from(self.pid),
+            inner.parent().map(|p| u16::from(p.pid)).unwrap_or(0),
             inner.name,
             inner.ticks_passed,
             inner.status

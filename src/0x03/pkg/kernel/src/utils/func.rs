@@ -7,14 +7,13 @@ pub fn test() -> ! {
         id = "unknown".into()
     }
     loop {
-        // TODO: better way to show more than one process is running?
         count += 1;
-        if count == 1000 {
+        if count == 100 {
             count = 0;
-            println!("\r{:-6} => Tick!", id);
+            print_serial!("\r{:-6} => Hello, world!", id);
         }
         unsafe {
-            x86_64::instructions::hlt();
+            core::arch::asm!("hlt");
         }
     }
 }

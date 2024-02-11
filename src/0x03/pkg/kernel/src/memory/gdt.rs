@@ -1,4 +1,3 @@
-
 use lazy_static::lazy_static;
 use x86_64::registers::segmentation::Segment;
 use x86_64::structures::gdt::{Descriptor, GlobalDescriptorTable, SegmentSelector};
@@ -6,16 +5,15 @@ use x86_64::structures::tss::TaskStateSegment;
 use x86_64::VirtAddr;
 
 pub const DOUBLE_FAULT_IST_INDEX: u16 = 0;
-pub const PAGE_FAULT_IST_INDEX: u16 = 1;
+pub const SYSCALL_IST_INDEX: u16 = 1;
+pub const PAGE_FAULT_IST_INDEX: u16 = 2;
 pub const CONTEXT_SWITCH_IST_INDEX: u16 = 0;
+
 pub const IST_SIZES: [usize; 3] = [0x1000, 0x1000, 0x1000];
 
 lazy_static! {
     static ref TSS: TaskStateSegment = {
         let mut tss = TaskStateSegment::new();
-
-        // initialize the TSS with the static buffers
-        // will be allocated on the bss section when the kernel is load
         tss.privilege_stack_table[0] = {
             const STACK_SIZE: usize = IST_SIZES[0];
             static mut STACK: [u8; STACK_SIZE] = [0; STACK_SIZE];
@@ -28,34 +26,30 @@ lazy_static! {
             );
             stack_end
         };
-
-        // fill tss.interrupt_stack_table with the static stack buffers like above
-        // You can use `tss.interrupt_stack_table[DOUBLE_FAULT_IST_INDEX as usize]`
         tss.interrupt_stack_table[DOUBLE_FAULT_IST_INDEX as usize] = {
-            const STACK_SIZE: usize = IST_SIZES[0];
+            const STACK_SIZE: usize = IST_SIZES[1];
             static mut STACK: [u8; STACK_SIZE] = [0; STACK_SIZE];
             let stack_start = VirtAddr::from_ptr(unsafe { STACK.as_ptr() });
             let stack_end = stack_start + STACK_SIZE;
             info!(
-                "Double-fault Stack  : 0x{:016x}-0x{:016x}",
+                "Double Fault IST : 0x{:016x}-0x{:016x}",
                 stack_start.as_u64(),
                 stack_end.as_u64()
             );
             stack_end
         };
         tss.interrupt_stack_table[PAGE_FAULT_IST_INDEX as usize] = {
-            const STACK_SIZE: usize = IST_SIZES[0];
+            const STACK_SIZE: usize = IST_SIZES[2];
             static mut STACK: [u8; STACK_SIZE] = [0; STACK_SIZE];
             let stack_start = VirtAddr::from_ptr(unsafe { STACK.as_ptr() });
             let stack_end = stack_start + STACK_SIZE;
             info!(
-                "Page-fault Stack  : 0x{:016x}-0x{:016x}",
+                "Page Fault IST   : 0x{:016x}-0x{:016x}",
                 stack_start.as_u64(),
                 stack_end.as_u64()
             );
             stack_end
         };
-
         tss
     };
 }

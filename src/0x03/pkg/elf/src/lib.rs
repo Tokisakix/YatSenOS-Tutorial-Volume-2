@@ -37,7 +37,7 @@ pub fn map_physical_memory(
 
 /// Map a range of memory
 ///
-/// allocate frames and map to specified address (R/W)
+/// allocate frames and map to specified address
 pub fn map_range(
     addr: u64,
     count: u64,
@@ -47,13 +47,12 @@ pub fn map_range(
     let range_start = Page::containing_address(VirtAddr::new(addr));
     let range_end = range_start + count;
 
-    info!(
+    trace!(
         "Page Range: {:?}({})",
         Page::range(range_start, range_end),
         count
     );
 
-    // default flags for stack
     let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE;
 
     for page in Page::range(range_start, range_end) {
@@ -67,7 +66,7 @@ pub fn map_range(
         }
     }
 
-    info!(
+    trace!(
         "Map hint: {:#x} -> {:#x}",
         addr,
         page_table
@@ -90,7 +89,7 @@ pub fn load_elf(
 ) -> Result<(), MapToError<Size4KiB>> {
     let file_buf = elf.input.as_ptr();
 
-    info!("Loading ELF file... @ {:#x}", file_buf as u64);
+    trace!("Loading ELF file...{:?}", file_buf);
 
     for segment in elf.program_iter() {
         if segment.get_type().unwrap() != program::Type::Load {
@@ -126,17 +125,15 @@ fn load_segment(
     let file_offset = segment.offset() & !0xfff;
     let virt_start_addr = VirtAddr::new(segment.virtual_addr());
 
+    let flags = segment.flags();
     let mut page_table_flags = PageTableFlags::PRESENT;
 
-    // handle page table flags with segment flags
-    if segment.flags().is_execute(){
-        page_table_flags.remove(PageTableFlags::NO_EXECUTE);
+    if !flags.is_execute() {
+        page_table_flags |= PageTableFlags::NO_EXECUTE;
     }
-    if segment.flags().is_read(){
-        page_table_flags.insert(PageTableFlags::USER_ACCESSIBLE);
-    }
-    if segment.flags().is_write(){
-        page_table_flags.insert(PageTableFlags::WRITABLE);
+
+    if flags.is_write() {
+        page_table_flags |= PageTableFlags::WRITABLE;
     }
 
     trace!("Segment page table flag: {:?}", page_table_flags);

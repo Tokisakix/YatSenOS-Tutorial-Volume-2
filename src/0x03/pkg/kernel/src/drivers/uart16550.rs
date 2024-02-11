@@ -1,70 +1,144 @@
+use bitflags::bitflags;
+/// reference: https://docs.rs/uart_16550
+/// reference: http://byterunner.com/16550.html
+/// reference: http://www.larvierinehart.com/serial/serialadc/serial.htm
+/// reference: https://wiki.osdev.org/Serial_Ports
 use core::fmt;
+use x86_64::instructions::port::{Port, PortReadOnly, PortWriteOnly};
 
-/// A port-mapped UART 16550 serial interface.
-pub struct SerialPort{
-    port : u16,
+macro_rules! wait_for {
+    ($cond:expr) => {
+        while !$cond {
+            core::hint::spin_loop()
+        }
+    };
 }
 
-fn inb(port: u16) -> u8{
-    unsafe{
-        x86::io::inb(port)
+bitflags! {
+    /// Line status flags
+    struct LineStsFlags: u8 {
+        const INPUT_FULL = 1;
+        // 1 to 4 unknown
+        const OUTPUT_EMPTY = 1 << 5;
+        // 6 and 7 unknown
     }
 }
 
-fn outb(port: u16, data: u8) {
-    unsafe{
-        x86::io::outb(port, data);
-    }
+/// A port-mapped UART.
+#[cfg_attr(docsrs, doc(cfg(target_arch = "x86_64")))]
+pub struct SerialPort<const BASE_ADDR: u16> {
+    /// - ransmit Holding Register (write)
+    /// - receive Holding Register (read)
+    data: Port<u8>,
+    /// Interrupt Enable Register
+    /// - bit 0: receive holding register interrupt
+    /// - bit 1: transmit holding register interrupt
+    /// - bit 2: receive line status interrupt
+    /// - bit 3: modem status interrupt
+    int_en: PortWriteOnly<u8>,
+    /// FIFO Control Register
+    fifo_ctrl: PortWriteOnly<u8>,
+    /// Line Control Register
+    line_ctrl: PortWriteOnly<u8>,
+    /// Modem Control Register
+    modem_ctrl: PortWriteOnly<u8>,
+    /// Line Status Register
+    line_sts: PortReadOnly<u8>,
 }
 
-impl SerialPort {
-    pub const fn new(port: u16) -> Self {
-        SerialPort { port }
+impl<const BASE_ADDR: u16> SerialPort<BASE_ADDR> {
+    /// Creates a new serial port interface on the given I/O port.
+    ///
+    /// This function is unsafe because the caller must ensure that the given base address
+    /// really points to a serial port device.
+    pub const unsafe fn new() -> Self {
+        Self {
+            data: Port::new(BASE_ADDR),
+            int_en: PortWriteOnly::new(BASE_ADDR + 1),
+            fifo_ctrl: PortWriteOnly::new(BASE_ADDR + 2),
+            line_ctrl: PortWriteOnly::new(BASE_ADDR + 3),
+            modem_ctrl: PortWriteOnly::new(BASE_ADDR + 4),
+            line_sts: PortReadOnly::new(BASE_ADDR + 5),
+        }
     }
 
     /// Initializes the serial port.
-    pub fn init(&self) {
-        // Initialize the serial port
-        outb(self.port + 1, 0x00);    // Disable all interrupts
-        outb(self.port + 3, 0x80);    // Enable DLAB (set baud rate divisor)
-        outb(self.port + 0, 0x03);    // Set divisor to 3 (lo byte) 38400 baud
-        outb(self.port + 1, 0x00);    //                  (hi byte)
-        outb(self.port + 3, 0x03);    // 8 bits, no parity, one stop bit
-        outb(self.port + 2, 0xC7);    // Enable FIFO, clear them, with 14-byte threshold
-        outb(self.port + 4, 0x0B);    // IRQs enabled, RTS/DSR set
-        outb(self.port + 4, 0x1E);    // Set in loopback mode, test the serial chip
-        outb(self.port + 0, 0xAE);    // Test serial chip (send byte 0xAE and check if serial returns same byte)
+    ///
+    /// The default configuration of [38400/8-N-1](https://en.wikipedia.org/wiki/8-N-1) is used.
+    pub fn init(&mut self) {
+        unsafe {
+            // Disable interrupts
+            self.int_en.write(0x00);
 
-        // Check if serial is faulty (i.e: not same byte as sent)
-        if inb(self.port + 0) != 0xAE {
-            return;
+            // Enable DLAB
+            self.line_ctrl.write(0x80);
+
+            // Set maximum speed to 38400 bps by configuring DLL and DLM
+            // > LSB of Divisor Latch when Enabled
+            self.data.write(0b00000011);
+            // > MSB of Divisor Latch when Enabled
+            self.int_en.write(0b00000000);
+
+            // Disable DLAB and set data word length to 8 bits
+            self.line_ctrl.write(0b00000011);
+
+            // Enable FIFO, clear TX/RX queues and
+            // set interrupt watermark at 1 bytes
+            self.fifo_ctrl.write(0b00000111);
+
+            // Mark data terminal ready, signal request to send
+            // and enable auxiliary output #2 (used as interrupt line for CPU)
+            self.modem_ctrl.write(0b00001011);
+
+            // Enable interrupts
+            self.int_en.write(0b00000001);
         }
+    }
 
-        // If serial is not faulty set it in normal operation mode
-        // (not-loopback with IRQs enabled and OUT#1 and OUT#2 bits enabled)
-        outb(self.port + 4, 0x0F);
-
-        outb(self.port + 1, 0x01);    // Enable interrupts
+    fn line_sts(&mut self) -> LineStsFlags {
+        unsafe { LineStsFlags::from_bits_truncate(self.line_sts.read()) }
     }
 
     /// Sends a byte on the serial port.
     pub fn send(&mut self, data: u8) {
-        // Send a byte on the serial port
-        while(inb(self.port + 5) & 0x20) == 0 {}
-        outb(self.port, data);
+        unsafe {
+            match data {
+                8 | 0x7F => {
+                    wait_for!(self.line_sts().contains(LineStsFlags::OUTPUT_EMPTY));
+                    self.data.write(8);
+                    wait_for!(self.line_sts().contains(LineStsFlags::OUTPUT_EMPTY));
+                    self.data.write(b' ');
+                    wait_for!(self.line_sts().contains(LineStsFlags::OUTPUT_EMPTY));
+                    self.data.write(8)
+                }
+                _ => {
+                    wait_for!(self.line_sts().contains(LineStsFlags::OUTPUT_EMPTY));
+                    self.data.write(data);
+                }
+            }
+        }
+    }
+
+    /// Sends a raw byte on the serial port, intended for binary data.
+    pub fn send_raw(&mut self, data: u8) {
+        unsafe {
+            wait_for!(self.line_sts().contains(LineStsFlags::OUTPUT_EMPTY));
+            self.data.write(data);
+        }
     }
 
     /// Receives a byte on the serial port no wait.
     pub fn receive(&mut self) -> Option<u8> {
-        // Receive a byte on the serial port no wait
-        if (inb(self.port + 5) & 1) != 0 {
-            return Some(inb(self.port));
+        unsafe {
+            if self.line_sts().contains(LineStsFlags::INPUT_FULL) {
+                return Some(self.data.read());
+            }
+            None
         }
-        None
     }
 }
 
-impl fmt::Write for SerialPort {
+impl<const BASE_ADDR: u16> fmt::Write for SerialPort<BASE_ADDR> {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         for byte in s.bytes() {
             self.send(byte);

@@ -1,20 +1,20 @@
 mod apic;
+mod clock;
 mod consts;
-pub mod clock;
+mod exception;
 mod serial;
-mod exceptions;
 
+use crate::memory::physical_to_virtual;
 use apic::*;
 use x86_64::structures::idt::InterruptDescriptorTable;
-use crate::memory::physical_to_virtual;
 
 lazy_static! {
     static ref IDT: InterruptDescriptorTable = {
         let mut idt = InterruptDescriptorTable::new();
         unsafe {
-            exceptions::register_idt(&mut idt);
-            clock::register_idt(&mut idt);
-            serial::register_idt(&mut idt);
+            exception::reg_idt(&mut idt);
+            serial::reg_idt(&mut idt);
+            clock::reg_idt(&mut idt);
         }
         idt
     };
@@ -23,15 +23,11 @@ lazy_static! {
 /// init interrupts system
 pub fn init() {
     IDT.load();
+    debug!("XApic support = {}.", apic::XApic::support());
+    let mut lapic = unsafe { XApic::new(physical_to_virtual(LAPIC_ADDR)) };
+    lapic.cpu_init();
+    serial::init();
 
-    // check and init APIC
-    let mut xapic = unsafe { XApic::new(physical_to_virtual(LAPIC_ADDR)) };
-    if XApic::support() {
-        xapic.cpu_init();
-    }
-
-    // FIXME: enable serial irq with IO APIC (use enable_irq)
-    enable_irq(consts::Irq::Serial0 as u8, 0);
     info!("Interrupts Initialized.");
 }
 
@@ -42,7 +38,7 @@ pub fn enable_irq(irq: u8, cpuid: u8) {
 }
 
 #[inline(always)]
-pub fn ack() {
+pub fn ack(_irq: u8) {
     let mut lapic = unsafe { XApic::new(physical_to_virtual(LAPIC_ADDR)) };
     lapic.eoi();
 }

@@ -8,7 +8,7 @@ use alloc::collections::BTreeMap;
 use alloc::{collections::VecDeque, format, sync::Arc};
 use spin::{Mutex, RwLock};
 use x86::current;
-use x86_64::VirtAddr;
+use x86_64::{registers::control::Cr3, VirtAddr};
 
 pub static PROCESS_MANAGER: spin::Once<ProcessManager> = spin::Once::new();
 
@@ -131,13 +131,21 @@ impl ProcessManager {
         // alloc stack for the new process base on pid
         let stack_top = proc.alloc_init_stack();
 
-        // FIXME: set the stack frame
+        // set the stack frame
+        let mut inner = proc.write();
+        inner.pause();
+        inner.init_stack_frame(entry, stack_top);
+        let pid = proc.pid();
+        info!("Spawn process: {}#{}", inner.name(), pid);
+        drop(inner);
 
-        // FIXME: add to process map
+        // add to process map
+        self.add_proc(pid, proc);
 
-        // FIXME: push to ready queue
+        // push to ready queue
+        self.push_ready(pid);
 
-        KERNEL_PID
+        pid
     }
 
     pub fn kill_current(&self, ret: isize) {

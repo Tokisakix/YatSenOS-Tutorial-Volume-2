@@ -1,3 +1,5 @@
+use core::ops::Deref;
+
 use super::ProcessId;
 use super::*;
 use crate::memory::*;
@@ -10,6 +12,7 @@ use x86_64::structures::paging::mapper::MapToError;
 use x86_64::structures::paging::page::PageRange;
 use x86_64::structures::paging::*;
 use x86_64::VirtAddr;
+use xmas_elf::ElfFile;
 
 #[derive(Clone)]
 pub struct Process {
@@ -92,8 +95,20 @@ impl Process {
 
     pub fn alloc_init_stack(&self) -> VirtAddr {
         // FIXME: alloc init stack base on self pid
+        let offset = (self.pid.0 - 1) as u64 * STACK_MAX_SIZE;
+        let stack_top = STACK_INIT_TOP - offset;
+        let stack_bottom = STACT_INIT_BOT - offset;
 
-        VirtAddr::new(0)
+        let stack_top_addr = VirtAddr::new(stack_top);
+        let stack_bottom_addr = VirtAddr::new(stack_bottom);
+        let alloc = &mut *get_frame_alloc_for_sure();
+        let mut mapper = self.read().page_table.as_ref().unwrap().mapper();
+
+        elf::map_range(stack_bottom, STACK_DEF_PAGE, &mut mapper, alloc).unwrap();
+
+        self.write().set_stack(stack_bottom_addr, STACK_DEF_PAGE);
+
+        stack_top_addr
     }
 }
 
@@ -133,15 +148,19 @@ impl ProcessInner {
     /// Save the process's context
     /// mark the process as ready
     pub(super) fn save(&mut self, context: &ProcessContext) {
-        // FIXME: save the process's context
+        // save the process's context
+        self.context.save(context);
+        self.status = ProgramStatus::Ready;
     }
 
     /// Restore the process's context
     /// mark the process as running
     pub(super) fn restore(&mut self, context: &mut ProcessContext) {
-        // FIXME: restore the process's context
-        
-        // FIXME: restore the process's page table
+        // restore the process's context
+        self.context.restore(context);
+        // restore the process's page table
+        self.page_table.as_ref().unwrap().load();
+        self.status = ProgramStatus::Running;
     }
 
     pub fn parent(&self) -> Option<Arc<Process>> {
@@ -149,11 +168,32 @@ impl ProcessInner {
     }
 
     pub fn kill(&mut self, ret: isize) {
-        // FIXME: set exit code
+        // set exit code
+        self.exit_code = Some(ret);
 
-        // FIXME: set status to dead
+        // set status to dead
+        self.status = ProgramStatus::Dead;
 
-        // FIXME: take and drop unused resources
+        // take and drop unused resources
+        self.proc_data.take();
+        self.page_table.take();
+    }
+
+    pub fn elf_map(&mut self, stack_bottom: u64) {
+        let frame_alloc = &mut *get_frame_alloc_for_sure();
+
+        let page_table = self.page_table.as_ref().unwrap();
+        let mut mapper = page_table.mapper();
+
+        let stack_segment =
+            elf::map_range(stack_bottom, STACK_DEF_PAGE, &mut mapper, frame_alloc).unwrap();
+
+        let proc_data = self.proc_data.as_mut().unwrap();
+        proc_data.stack_segment = Some(stack_segment);
+    }
+
+    pub fn init_stack_frame(&mut self, entry: VirtAddr, stack_top: VirtAddr) {
+        self.context.init_stack_frame(entry, stack_top)
     }
 }
 

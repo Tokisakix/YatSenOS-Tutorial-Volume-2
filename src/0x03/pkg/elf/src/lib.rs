@@ -47,7 +47,7 @@ pub fn map_range(
     let range_start = Page::containing_address(VirtAddr::new(addr));
     let range_end = range_start + count;
 
-    trace!(
+    info!(
         "Page Range: {:?}({})",
         Page::range(range_start, range_end),
         count
@@ -67,7 +67,7 @@ pub fn map_range(
         }
     }
 
-    trace!(
+    info!(
         "Map hint: {:#x} -> {:#x}",
         addr,
         page_table

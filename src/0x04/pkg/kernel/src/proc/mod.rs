@@ -6,6 +6,8 @@ mod pid;
 mod process;
 mod processor;
 
+use alloc::sync::Arc;
+use alloc::vec::Vec;
 use manager::*;
 use paging::*;
 use process::*;
@@ -14,6 +16,7 @@ use alloc::string::String;
 pub use context::ProcessContext;
 pub use data::ProcessData;
 pub use pid::ProcessId;
+use xmas_elf::ElfFile;
 
 use x86_64::structures::idt::PageFaultErrorCode;
 use x86_64::VirtAddr;
@@ -58,7 +61,7 @@ pub enum ProgramStatus {
 }
 
 /// init process manager
-pub fn init() {
+pub fn init(boot_info: &'static boot::BootInfo) {
     let stack_bot = VirtAddr::new(KSTACK_INIT_BOT);
     let mut kproc_data = ProcessData::new();
     kproc_data.set_stack(stack_bot, KSTACK_DEF_PAGE);
@@ -73,7 +76,8 @@ pub fn init() {
         Some(kproc_data),
     );
 
-    manager::init(kproc);
+    let app_list = boot_info.loaded_apps.as_ref();
+    manager::init(kproc, app_list);
 
     info!("Process Manager Initialized.");
 }
@@ -86,12 +90,12 @@ pub fn switch(context: &mut ProcessContext) {
     });
 }
 
-pub fn spawn_kernel_thread(entry: fn() -> !, name: String, data: Option<ProcessData>) -> ProcessId {
-    x86_64::instructions::interrupts::without_interrupts(|| {
-        let entry = VirtAddr::new(entry as usize as u64);
-        get_process_manager().spawn_kernel_thread(entry, name, data)
-    })
-}
+// pub fn spawn_kernel_thread(entry: fn() -> !, name: String, data: Option<ProcessData>) -> ProcessId {
+//     x86_64::instructions::interrupts::without_interrupts(|| {
+//         let entry = VirtAddr::new(entry as usize as u64);
+//         get_process_manager().spawn_kernel_thread(entry, name, data)
+//     })
+// }
 
 pub fn print_process_list() {
     x86_64::instructions::interrupts::without_interrupts(|| {
@@ -130,4 +134,46 @@ pub fn handle_page_fault(addr: VirtAddr, err_code: PageFaultErrorCode) -> bool {
 
 pub fn current_process_info() {
     debug!("{:#?}", get_process_manager().current())
+}
+
+pub fn list_app() {
+    x86_64::instructions::interrupts::without_interrupts(|| {
+        let app_list = get_process_manager().app_list();
+        if app_list.is_none() {
+            println!(">>> No app found in list!");
+            return;
+        }
+
+        let apps = app_list
+            .unwrap()
+            .iter()
+            .map(|app| app.name.as_str())
+            .collect::<Vec<&str>>()
+            .join(", ");
+
+        println!(">>> App list: {}", apps);
+    });
+}
+
+pub fn spawn(name: &str) -> Option<ProcessId> {
+    let app = x86_64::instructions::interrupts::without_interrupts(|| {
+        let app_list = get_process_manager().app_list()?;
+        app_list.iter().find(|&app| app.name.eq(name))
+    });
+
+    elf_spawn(alloc::string::ToString::to_string(&name), &app.unwrap().elf)
+}
+
+pub fn elf_spawn(name: String, elf: &ElfFile) -> Option<ProcessId> {
+    let pid = x86_64::instructions::interrupts::without_interrupts(|| {
+        let manager = get_process_manager();
+        let process_name = name.to_lowercase();
+        let parent = Arc::downgrade(&manager.current());
+        let pid = manager.spawn(elf, name, Some(parent), None);
+
+        debug!("Spawned process: {}#{}", process_name, pid);
+        pid
+    });
+
+    Some(pid)
 }

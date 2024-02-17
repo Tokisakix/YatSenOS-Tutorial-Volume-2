@@ -39,7 +39,7 @@ pub fn init(boot_info: &'static BootInfo) {
     interrupt::init(); // init interrupts
     clock::init(boot_info); // init clock (uefi service)
     memory::init(boot_info); // init memory manager
-    proc::init(); // init process manager
+    proc::init(boot_info); // init process manager
     input::init(); // init input
 
     x86_64::instructions::interrupts::enable();
@@ -48,15 +48,15 @@ pub fn init(boot_info: &'static BootInfo) {
     info!("YatSenOS initialized.");
 }
 
-pub fn stack_thread_test() {
-    let pid = proc::spawn_kernel_thread(
-        utils::func::stack_test,
-        alloc::string::String::from("stack"),
-        None,
-    );
+// pub fn stack_thread_test() {
+//     let pid = proc::spawn_kernel_thread(
+//         utils::func::stack_test,
+//         alloc::string::String::from("stack"),
+//         None,
+//     );
 
-    wait(pid);
-}
+//     wait(pid);
+// }
 
 pub fn wait(pid: proc::ProcessId) {
     loop {
@@ -81,10 +81,10 @@ pub fn shutdown(boot_info: &'static BootInfo) -> ! {
     }
 }
 
-pub fn new_test_thread(id: &str) -> proc::ProcessId {
-    proc::spawn_kernel_thread(
-        utils::func::test,
-        format!("#{}_test", id),
-        Some(proc::ProcessData::new().set_env("id", id)),
-    )
-}
+// pub fn new_test_thread(id: &str) -> proc::ProcessId {
+//     proc::spawn_kernel_thread(
+//         utils::func::test,
+//         format!("#{}_test", id),
+//         Some(proc::ProcessData::new().set_env("id", id)),
+//     )
+// }

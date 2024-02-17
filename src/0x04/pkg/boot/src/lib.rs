@@ -8,8 +8,6 @@ pub use uefi::table::runtime::*;
 pub use uefi::table::Runtime;
 pub use uefi::Status as UefiStatus;
 
-use arrayvec::ArrayVec;
-
 pub mod allocator;
 pub mod config;
 pub mod fs;
@@ -17,7 +15,20 @@ pub mod fs;
 #[macro_use]
 extern crate log;
 
+use arrayvec::{ArrayString, ArrayVec};
+use xmas_elf::ElfFile;
+
 pub type MemoryMap = ArrayVec<MemoryDescriptor, 256>;
+
+/// App information
+pub struct App<'a> {
+    /// The name of app
+    pub name: ArrayString<16>,
+    /// The ELF file
+    pub elf: ElfFile<'a>,
+}
+
+pub type AppList = ArrayVec<App<'static>, 16>;
 
 /// This structure represents the information that the bootloader passes to the kernel.
 pub struct BootInfo {
@@ -32,6 +43,8 @@ pub struct BootInfo {
 
     // Log Level
     pub log_level: &'static str,
+
+    pub loaded_apps: Option<AppList>,
 }
 
 /// This is copied from https://docs.rs/bootloader/0.10.12/src/bootloader/lib.rs.html

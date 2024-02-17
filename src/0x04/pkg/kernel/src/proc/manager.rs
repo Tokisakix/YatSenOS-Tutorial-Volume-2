@@ -11,10 +11,10 @@ use x86_64::VirtAddr;
 
 pub static PROCESS_MANAGER: spin::Once<ProcessManager> = spin::Once::new();
 
-pub fn init(init: Arc<Process>) {
+pub fn init(init: Arc<Process>, app_list: Option<&'static boot::AppList>) {
     init.write().resume();
     processor::set_pid(init.pid());
-    PROCESS_MANAGER.call_once(|| ProcessManager::new(init));
+    PROCESS_MANAGER.call_once(|| ProcessManager::new(init, app_list));
 }
 
 pub fn get_process_manager() -> &'static ProcessManager {
@@ -26,10 +26,11 @@ pub fn get_process_manager() -> &'static ProcessManager {
 pub struct ProcessManager {
     processes: RwLock<BTreeMap<ProcessId, Arc<Process>>>,
     ready_queue: Mutex<VecDeque<ProcessId>>,
+    app_list: Option<&'static boot::AppList>,
 }
 
 impl ProcessManager {
-    pub fn new(init: Arc<Process>) -> Self {
+    pub fn new(init: Arc<Process>, app_list: Option<&'static boot::AppList>) -> Self {
         let mut processes = BTreeMap::new();
         let ready_queue = VecDeque::new();
         let pid = init.pid();
@@ -40,7 +41,12 @@ impl ProcessManager {
         Self {
             processes: RwLock::new(processes),
             ready_queue: Mutex::new(ready_queue),
+            app_list: app_list,
         }
+    }
+    
+    pub fn app_list(&self) -> Option<&'static boot::AppList> {
+        self.app_list
     }
 
     #[inline]
@@ -114,30 +120,30 @@ impl ProcessManager {
         pid
     }
 
-    pub fn spawn_kernel_thread(
-        &self,
-        entry: VirtAddr,
-        name: String,
-        proc_data: Option<ProcessData>,
-    ) -> ProcessId {
-        let kproc = self.get_proc(&KERNEL_PID).unwrap();
-        let page_table = kproc.read().clone_page_table();
-        let proc = Process::new(name, Some(Arc::downgrade(&kproc)), page_table, proc_data);
+    // pub fn spawn_kernel_thread(
+    //     &self,
+    //     entry: VirtAddr,
+    //     name: String,
+    //     proc_data: Option<ProcessData>,
+    // ) -> ProcessId {
+    //     let kproc = self.get_proc(&KERNEL_PID).unwrap();
+    //     let page_table = kproc.read().clone_page_table();
+    //     let proc = Process::new(name, Some(Arc::downgrade(&kproc)), page_table, proc_data);
 
-        let stack_top = proc.alloc_init_stack();
-        let mut inner = proc.write();
-        inner.pause();
-        inner.init_stack_frame(entry, stack_top);
+    //     let stack_top = proc.alloc_init_stack();
+    //     let mut inner = proc.write();
+    //     inner.pause();
+    //     inner.init_stack_frame(entry, stack_top);
 
-        let pid = proc.pid();
-        info!("Spawn process: {}#{}", inner.name(), pid);
-        drop(inner);
+    //     let pid = proc.pid();
+    //     info!("Spawn process: {}#{}", inner.name(), pid);
+    //     drop(inner);
 
-        self.add_proc(pid, proc);
-        self.push_ready(pid);
+    //     self.add_proc(pid, proc);
+    //     self.push_ready(pid);
 
-        pid
-    }
+    //     pid
+    // }
 
     pub fn kill_current(&self, ret: isize) {
         self.kill(processor::current_pid(), ret);
@@ -231,5 +237,39 @@ impl ProcessManager {
         output += &processor::print_processors();
 
         print!("{}", output);
+    }
+
+    pub fn spawn(
+        &self,
+        elf: &ElfFile,
+        name: String,
+        parent: Option<alloc::sync::Weak<Process>>,
+        proc_data: Option<ProcessData>,
+    ) -> ProcessId {
+        let kproc = self.get_proc(&KERNEL_PID).unwrap();
+        let page_table = kproc.read().clone_page_table();
+        let proc = Process::new(name, parent, page_table, proc_data);
+
+        let mut inner = proc.write();
+        // load elf to process pagetable
+        inner.pause();
+        inner.load_elf(elf);
+
+        // alloc new stack for process
+        // mark process as ready
+        inner.init_stack_frame(
+            VirtAddr::new_truncate(elf.header.pt2.entry_point()),
+            VirtAddr::new_truncate(STACK_INIT_TOP),
+        );
+        drop(inner);
+
+        trace!("New {:#?}", &proc);
+
+        // something like kernel thread
+        let pid = proc.pid();
+        self.add_proc(pid, proc);
+        self.push_ready(pid);
+
+        pid
     }
 }

@@ -120,6 +120,14 @@ fn efi_main(image: uefi::Handle, mut system_table: SystemTable<Boot>) -> Status 
 
     free_elf(bs, elf);
 
+    let apps = if config.load_apps {
+        info!("Loading apps...");
+        Some(load_apps(system_table.boot_services()))
+    } else {
+        info!("Skip loading apps");
+        None
+    };
+
     // 5. Exit boot and jump to ELF entry
     info!("Exiting boot services...");
 
@@ -132,6 +140,7 @@ fn efi_main(image: uefi::Handle, mut system_table: SystemTable<Boot>) -> Status 
         physical_memory_offset: config.physical_memory_offset,
         system_table: runtime,
         log_level: config.log_level,
+        loaded_apps: apps,
     };
 
     // align stack to 8 bytes

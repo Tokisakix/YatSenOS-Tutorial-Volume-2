@@ -205,6 +205,29 @@ impl ProcessInner {
         self.proc_data.take();
         self.page_table.take();
     }
+
+    pub fn load_elf(&mut self, elf: &ElfFile) {
+        let alloc = &mut *get_frame_alloc_for_sure();
+
+        let page_table = self.page_table.as_ref().unwrap();
+        let mut mapper = page_table.mapper();
+
+        let code_segments = elf::load_elf(
+            elf,
+            *PHYSICAL_OFFSET.get().unwrap(),
+            &mut mapper,
+            alloc,
+        )
+        .unwrap();
+
+        let stack_segment =
+            elf::map_range(STACT_INIT_BOT, STACK_DEF_PAGE, &mut mapper, alloc).unwrap();
+
+        // record memory usage
+        let proc_data = self.proc_data.as_mut().unwrap();
+        proc_data.stack_memory_usage = stack_segment.count();
+        proc_data.stack_segment = Some(stack_segment);
+    }
 }
 
 impl core::ops::Deref for Process {

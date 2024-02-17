@@ -23,4 +23,5 @@ linked_list_allocator = "0.10"
 pc-keyboard = "0.7"
 crossbeam-queue = { version = "0.3", default-features = false, features = ["alloc"] }
 volatile = "0.5"
+xmas-elf = "0.9"
 futures-util = { version = "0.3", default-features = false, features = ["alloc"] }

@@ -230,7 +230,7 @@ impl ProcessInner {
             stack.count()
         );
 
-        elf::unmap_range(
+        elf::un_map_range(
             stack.start.start_address().as_u64(),
             stack.count() as u64,
             &mut mapper,

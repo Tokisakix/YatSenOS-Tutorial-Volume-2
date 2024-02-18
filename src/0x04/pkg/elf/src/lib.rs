@@ -88,7 +88,7 @@ pub fn map_range(
 /// Unmap a range of memory
 ///
 /// unmap specified address and deallocate frames
-pub fn unmap_range(
+pub fn un_map_range(
     addr: u64,
     pages: u64,
     page_table: &mut impl Mapper<Size4KiB>,

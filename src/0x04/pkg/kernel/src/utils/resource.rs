@@ -1,4 +1,7 @@
 use alloc::string::String;
+use pc_keyboard::DecodedKey;
+
+use crate::input::try_get_key;
 
 #[derive(Debug, Clone)]
 pub enum StdIO {
@@ -18,8 +21,17 @@ impl Resource {
         match self {
             Resource::Console(stdio) => match stdio {
                 &StdIO::Stdin => {
-                    // FIXME: read from input buffer
-                    Some(0)
+                    return if buf.len() < 4 {
+                        Some(0)
+                    } else {
+                        // TODO: get key async
+                        if let Some(DecodedKey::Unicode(k)) = try_get_key() {
+                            let s = k.encode_utf8(buf);
+                            Some(s.len())
+                        } else {
+                            Some(0)
+                        }
+                    };
                 }
                 _ => None,
             },

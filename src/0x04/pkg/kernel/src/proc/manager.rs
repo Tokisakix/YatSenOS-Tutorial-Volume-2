@@ -2,17 +2,19 @@ use super::*;
 use crate::memory::{
     self,
     allocator::{ALLOCATOR, HEAP_SIZE},
-    get_frame_alloc_for_sure, PAGE_SIZE,
+    get_frame_alloc_for_sure,
+    user::{USER_ALLOCATOR, USER_HEAP_SIZE},
+    PAGE_SIZE,
 };
-use alloc::collections::BTreeMap;
+use alloc::{collections::BTreeMap, sync::Weak};
 use alloc::{collections::VecDeque, format, sync::Arc};
 use spin::{Mutex, RwLock};
 use x86_64::VirtAddr;
+use xmas_elf::ElfFile;
 
 pub static PROCESS_MANAGER: spin::Once<ProcessManager> = spin::Once::new();
 
-pub fn init(init: Arc<Process>, app_list: Option<&'static boot::AppList>) {
-    init.write().resume();
+pub fn init(init: Arc<Process>, app_list: boot::AppListRef) {
     processor::set_pid(init.pid());
     PROCESS_MANAGER.call_once(|| ProcessManager::new(init, app_list));
 }
@@ -26,26 +28,23 @@ pub fn get_process_manager() -> &'static ProcessManager {
 pub struct ProcessManager {
     processes: RwLock<BTreeMap<ProcessId, Arc<Process>>>,
     ready_queue: Mutex<VecDeque<ProcessId>>,
-    app_list: Option<&'static boot::AppList>,
+    app_list: boot::AppListRef,
 }
 
 impl ProcessManager {
-    pub fn new(init: Arc<Process>, app_list: Option<&'static boot::AppList>) -> Self {
+    pub fn new(init: Arc<Process>, app_list: boot::AppListRef) -> Self {
         let mut processes = BTreeMap::new();
         let ready_queue = VecDeque::new();
         let pid = init.pid();
-
-        trace!("Init {:#?}", init);
-
         processes.insert(pid, init);
         Self {
             processes: RwLock::new(processes),
             ready_queue: Mutex::new(ready_queue),
-            app_list: app_list,
+            app_list,
         }
     }
-    
-    pub fn app_list(&self) -> Option<&'static boot::AppList> {
+
+    pub fn app_list(&self) -> boot::AppListRef {
         self.app_list
     }
 
@@ -75,23 +74,17 @@ impl ProcessManager {
             .unwrap_or(-1)
     }
 
-    pub fn save_current(&self, context: &ProcessContext) {
+    pub fn save_current(&self, context: &ProcessContext) -> ProcessId {
         let current = self.current();
         let pid = current.pid();
 
-        let mut inner = current.write();
-        inner.tick();
-        inner.save(context);
-        let status = inner.status();
-        drop(inner);
+        let mut current = current.write();
+        current.tick();
+        current.save(context);
 
         // debug!("Save process {} #{}", current.name(), pid);
 
-        if status != ProgramStatus::Dead {
-            self.push_ready(pid);
-        } else {
-            debug!("Process {:#?} #{} is dead", current, pid);
-        }
+        pid
     }
 
     pub fn switch_next(&self, context: &mut ProcessContext) -> ProcessId {
@@ -106,8 +99,6 @@ impl ProcessManager {
                 continue;
             }
 
-            // debug!("Switch process {} #{}", proc.read().name(), next);
-
             if pid != next {
                 proc.write().restore(context);
                 processor::set_pid(next);
@@ -120,32 +111,70 @@ impl ProcessManager {
         pid
     }
 
+    pub fn close(&self, fd: u8) -> bool {
+        if fd < 3 {
+            false // stdin, stdout, stderr are reserved
+        } else {
+            self.current().write().close(fd)
+        }
+    }
+
+    pub fn spawn(
+        &self,
+        elf: &ElfFile,
+        name: String,
+        parent: Option<Weak<Process>>,
+        proc_data: Option<ProcessData>,
+    ) -> ProcessId {
+        let kproc = self.get_proc(&KERNEL_PID).unwrap();
+        let page_table = kproc.read().clont_page_table();
+        let proc = Process::new(name, parent, page_table, proc_data);
+
+        let mut inner = proc.write();
+        inner.pause();
+        inner.load_elf(elf);
+        inner.init_stack_frame(
+            VirtAddr::new_truncate(elf.header.pt2.entry_point()),
+            VirtAddr::new_truncate(STACK_INIT_TOP),
+        );
+        drop(inner);
+
+        trace!("New {:#?}", &proc);
+
+        let pid = proc.pid();
+        self.add_proc(pid, proc);
+        self.push_ready(pid);
+
+        pid
+    }
+
+    // DEPRECATED: do not spawn kernel thread
     // pub fn spawn_kernel_thread(
     //     &self,
     //     entry: VirtAddr,
+    //     stack_top: VirtAddr,
     //     name: String,
+    //     parent: ProcessId,
     //     proc_data: Option<ProcessData>,
     // ) -> ProcessId {
-    //     let kproc = self.get_proc(&KERNEL_PID).unwrap();
-    //     let page_table = kproc.read().clone_page_table();
-    //     let proc = Process::new(name, Some(Arc::downgrade(&kproc)), page_table, proc_data);
-
-    //     let stack_top = proc.alloc_init_stack();
-    //     let mut inner = proc.write();
-    //     inner.pause();
-    //     inner.init_stack_frame(entry, stack_top);
-
-    //     let pid = proc.pid();
-    //     info!("Spawn process: {}#{}", inner.name(), pid);
-    //     drop(inner);
-
-    //     self.add_proc(pid, proc);
-    //     self.push_ready(pid);
-
+    //     let kproc = self.get_proc(KERNEL_PID).unwrap();
+    //     let page_table = kproc.read().clont_page_table();
+    //     let mut p = Process::new(
+    //         &mut crate::memory::get_frame_alloc_for_sure(),
+    //         name,
+    //         parent,
+    //         page_table,
+    //         proc_data,
+    //     );
+    //     p.pause();
+    //     p.init_stack_frame(entry, stack_top);
+    //     info!("Spawn process: {}#{}", p.name(), p.pid());
+    //     let pid = p.pid();
+    //     self.processes.push(p);
     //     pid
     // }
 
-    pub fn kill_current(&self, ret: isize) {
+    pub fn kill_self(&self, ret: isize) {
         self.kill(processor::current_pid(), ret);
     }
 
@@ -157,7 +186,8 @@ impl ProcessManager {
                 addr
             );
             if cur_proc.read().is_on_stack(addr) {
-                cur_proc.write().try_alloc_new_stack_page(addr).is_ok()
+                cur_proc.write().try_alloc_new_stack_page(addr).unwrap();
+                true
             } else {
                 false
             }
@@ -176,18 +206,14 @@ impl ProcessManager {
 
         let proc = proc.unwrap();
 
-        if proc.read().status() == ProgramStatus::Dead {
-            warn!("Process #{} is already dead.", pid);
-            return;
-        }
-
         trace!("Kill {:#?}", &proc);
 
         proc.kill(ret);
     }
 
     pub fn print_process_list(&self) {
-        let mut output = String::from("  PID | PPID | Process Name |  Ticks  | Status\n");
+        let mut output =
+            String::from("  PID | PPID | Process Name |  Ticks  |   Memory  | Status\n");
         for (_, p) in self.processes.read().iter() {
             if p.read().status() != ProgramStatus::Dead {
                 output += format!("{}\n", p).as_str();
@@ -196,6 +222,9 @@ impl ProcessManager {
 
         let heap_used = ALLOCATOR.lock().used();
         let heap_size = HEAP_SIZE;
+
+        let user_heap_used = USER_ALLOCATOR.lock().used();
+        let user_heap_size = USER_HEAP_SIZE;
 
         let alloc = get_frame_alloc_for_sure();
         let frames_used = alloc.frames_used();
@@ -213,6 +242,21 @@ impl ProcessManager {
             sys_size,
             sys_size_unit,
             heap_used as f64 / heap_size as f64 * 100.0
+        )
+        .as_str();
+
+        let (user_used, user_used_unit) = memory::humanized_size(user_heap_used as u64);
+        let (user_size, user_size_unit) = memory::humanized_size(user_heap_size as u64);
+
+        output += format!(
+            "User   : {:>6.*} {} / {:>6.*} {} ({:>5.2}%)\n",
+            2,
+            user_used,
+            user_used_unit,
+            2,
+            user_size,
+            user_size_unit,
+            user_heap_used as f64 / user_heap_size as f64 * 100.0
         )
         .as_str();
 
@@ -237,39 +281,5 @@ impl ProcessManager {
         output += &processor::print_processors();
 
         print!("{}", output);
-    }
-
-    pub fn spawn(
-        &self,
-        elf: &ElfFile,
-        name: String,
-        parent: Option<alloc::sync::Weak<Process>>,
-        proc_data: Option<ProcessData>,
-    ) -> ProcessId {
-        let kproc = self.get_proc(&KERNEL_PID).unwrap();
-        let page_table = kproc.read().clone_page_table();
-        let proc = Process::new(name, parent, page_table, proc_data);
-
-        let mut inner = proc.write();
-        // load elf to process pagetable
-        inner.pause();
-        inner.load_elf(elf);
-
-        // alloc new stack for process
-        // mark process as ready
-        inner.init_stack_frame(
-            VirtAddr::new_truncate(elf.header.pt2.entry_point()),
-            VirtAddr::new_truncate(STACK_INIT_TOP),
-        );
-        drop(inner);
-
-        trace!("New {:#?}", &proc);
-
-        // something like kernel thread
-        let pid = proc.pid();
-        self.add_proc(pid, proc);
-        self.push_ready(pid);
-
-        pid
     }
 }

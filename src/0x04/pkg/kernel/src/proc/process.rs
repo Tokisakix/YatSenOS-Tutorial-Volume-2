@@ -1,15 +1,16 @@
 use super::ProcessId;
 use super::*;
-use crate::memory::*;
+use crate::memory::{self, *};
 use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::sync::Weak;
 use alloc::vec::Vec;
 use spin::*;
-use x86_64::structures::paging::mapper::MapToError;
+use x86_64::structures::paging::mapper::{CleanUp, MapToError};
 use x86_64::structures::paging::page::PageRange;
 use x86_64::structures::paging::*;
 use x86_64::VirtAddr;
+use xmas_elf::ElfFile;
 
 #[derive(Clone)]
 pub struct Process {
@@ -87,25 +88,7 @@ impl Process {
             ret
         );
 
-        inner.kill(ret);
-    }
-
-    pub fn alloc_init_stack(&self) -> VirtAddr {
-        // stack top set by pid
-        let offset = (self.pid.0 - 1) as u64 * STACK_MAX_SIZE;
-        let stack_top = STACK_INIT_TOP - offset;
-        let stack_bottom = STACT_INIT_BOT - offset;
-
-        let stack_top_addr = VirtAddr::new(stack_top);
-        let stack_bottom_addr = VirtAddr::new(stack_bottom);
-        let alloc = &mut *get_frame_alloc_for_sure();
-        let mut mapper = self.read().page_table.as_ref().unwrap().mapper();
-
-        elf::map_range(stack_bottom, STACK_DEF_PAGE, &mut mapper, alloc).unwrap();
-
-        self.write().set_stack(stack_bottom_addr, STACK_DEF_PAGE);
-
-        stack_top_addr
+        inner.kill(self.pid, ret);
     }
 }
 
@@ -130,28 +113,23 @@ impl ProcessInner {
         self.status = ProgramStatus::Running;
     }
 
+    pub fn is_ready(&self) -> bool {
+        self.status == ProgramStatus::Ready
+    }
+
     pub fn exit_code(&self) -> Option<isize> {
         self.exit_code
     }
 
-    pub fn clone_page_table(&self) -> PageTableContext {
+    pub fn clont_page_table(&self) -> PageTableContext {
         self.page_table.as_ref().unwrap().clone()
-    }
-
-    pub fn is_ready(&self) -> bool {
-        self.status == ProgramStatus::Ready
     }
 
     /// Save the process's context
     /// mark the process as ready
     pub(super) fn save(&mut self, context: &ProcessContext) {
         self.context.save(context);
-
-        // dead process should not be ready
-        // (kernel thread exit without syscall)
-        if self.status == ProgramStatus::Running {
-            self.status = ProgramStatus::Ready;
-        }
+        self.status = ProgramStatus::Ready;
     }
 
     /// Restore the process's context
@@ -163,11 +141,37 @@ impl ProcessInner {
     }
 
     pub fn init_stack_frame(&mut self, entry: VirtAddr, stack_top: VirtAddr) {
-        self.context.init_stack_frame(entry, stack_top);
+        self.context.init_stack_frame(entry, stack_top)
     }
 
     pub fn parent(&self) -> Option<Arc<Process>> {
         self.parent.as_ref().and_then(|p| p.upgrade())
+    }
+
+    pub fn load_elf(&mut self, elf: &ElfFile) {
+        let alloc = &mut *get_frame_alloc_for_sure();
+
+        let page_table = self.page_table.as_ref().unwrap();
+        let mut mapper = page_table.mapper();
+
+        let code_segments = elf::load_elf(
+            elf,
+            *PHYSICAL_OFFSET.get().unwrap(),
+            &mut mapper,
+            alloc,
+            true,
+        )
+        .unwrap();
+
+        let stack_segment =
+            elf::map_range(STACT_INIT_BOT, STACK_DEF_PAGE, &mut mapper, alloc, true).unwrap();
+
+        // record memory usage
+        let proc_data = self.proc_data.as_mut().unwrap();
+        proc_data.code_memory_usage = code_segments.iter().map(|seg| seg.count()).sum();
+        proc_data.stack_memory_usage = stack_segment.count();
+        proc_data.code_segments = Some(code_segments);
+        proc_data.stack_segment = Some(stack_segment);
     }
 
     pub fn try_alloc_new_stack_page(&mut self, addr: VirtAddr) -> Result<(), MapToError<Size4KiB>> {
@@ -185,7 +189,8 @@ impl ProcessInner {
             pages
         );
 
-        elf::map_range(addr.as_u64(), pages, page_table, alloc)?;
+        let user_access = processor::current_pid() != KERNEL_PID;
+        elf::map_range(addr.as_u64(), pages, page_table, alloc, user_access)?;
 
         let new_stack = PageRange {
             start: new_start_page,
@@ -199,34 +204,63 @@ impl ProcessInner {
         Ok(())
     }
 
-    pub fn kill(&mut self, ret: isize) {
-        self.status = ProgramStatus::Dead;
-        self.exit_code = Some(ret);
+    pub fn kill(&mut self, pid: ProcessId, ret: isize) {
+        self.clean_up_page_table(pid);
         self.proc_data.take();
         self.page_table.take();
+        self.exit_code = Some(ret);
+        self.status = ProgramStatus::Dead;
     }
 
-    pub fn load_elf(&mut self, elf: &ElfFile) {
-        let alloc = &mut *get_frame_alloc_for_sure();
-
-        let page_table = self.page_table.as_ref().unwrap();
+    fn clean_up_page_table(&mut self, pid: ProcessId) {
+        let page_table = self.page_table.take().unwrap();
         let mut mapper = page_table.mapper();
 
-        let code_segments = elf::load_elf(
-            elf,
-            *PHYSICAL_OFFSET.get().unwrap(),
+        let frame_deallocator = &mut *get_frame_alloc_for_sure();
+
+        let proc_data = self.proc_data.as_mut().unwrap();
+        let stack = proc_data.stack_segment.unwrap();
+
+        trace!(
+            "Free stack for {}#{}: [{:#x} -> {:#x}) ({} frames)",
+            self.name,
+            pid,
+            stack.start.start_address(),
+            stack.end.start_address(),
+            stack.count()
+        );
+
+        elf::unmap_range(
+            stack.start.start_address().as_u64(),
+            stack.count() as u64,
             &mut mapper,
-            alloc,
+            frame_deallocator,
+            true,
         )
         .unwrap();
 
-        let stack_segment =
-            elf::map_range(STACT_INIT_BOT, STACK_DEF_PAGE, &mut mapper, alloc).unwrap();
+        // clean up page table when no other process using it
+        if page_table.using_count() == 1 {
+            trace!("Clean up page table for {}#{}", self.name, pid);
+            unsafe {
+                if let Some(ref mut segments) = proc_data.code_segments {
+                    for range in segments {
+                        for page in range {
+                            if let Ok(ret) = mapper.unmap(page) {
+                                frame_deallocator.deallocate_frame(ret.0);
+                                ret.1.flush();
+                            }
+                        }
+                    }
+                }
+                // free P1-P3
+                mapper.clean_up(frame_deallocator);
+                // free P4
+                frame_deallocator.deallocate_frame(page_table.reg.addr);
+            }
+        }
 
-        // record memory usage
-        let proc_data = self.proc_data.as_mut().unwrap();
-        proc_data.stack_memory_usage = stack_segment.count();
-        proc_data.stack_segment = Some(stack_segment);
+        drop(page_table);
     }
 }
 
@@ -266,14 +300,11 @@ impl core::fmt::Debug for Process {
         f.field("parent", &inner.parent().map(|p| p.pid));
         f.field("status", &inner.status);
         f.field("ticks_passed", &inner.ticks_passed);
-        f.field(
-            "children",
-            &inner.children.iter().map(|c| c.pid.0).collect::<Vec<u16>>(),
-        );
+        f.field("children", &inner.children.iter().map(|c| c.pid.0));
         f.field("page_table", &inner.page_table);
         f.field("status", &inner.status);
+        f.field("stack", &inner.stack_segment);
         f.field("context", &inner.context);
-        f.field("stack", &inner.proc_data.as_ref().map(|d| d.stack_segment));
         f.finish()
     }
 }
@@ -281,13 +312,16 @@ impl core::fmt::Debug for Process {
 impl core::fmt::Display for Process {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         let inner = self.inner.read();
+        let (size, unit) = memory::humanized_size(inner.memory_usage() as u64 * 4096);
         write!(
             f,
-            " #{:-3} | #{:-3} | {:12} | {:7} | {:?}",
+            " #{:-3} | #{:-3} | {:12} | {:7} | {:>5.1} {} | {:?}",
             u16::from(self.pid),
             inner.parent().map(|p| u16::from(p.pid)).unwrap_or(0),
             inner.name,
             inner.ticks_passed,
+            size,
+            unit,
             inner.status
         )?;
         Ok(())

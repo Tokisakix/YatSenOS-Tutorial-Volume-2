@@ -5,6 +5,7 @@
 #![feature(type_alias_impl_trait)]
 #![feature(panic_info_message)]
 
+#[macro_use]
 extern crate alloc;
 #[macro_use]
 extern crate log;
@@ -22,9 +23,8 @@ pub use utils::*;
 pub mod drivers;
 pub use drivers::*;
 
-pub mod memory;
-
 pub mod interrupt;
+pub mod memory;
 pub mod proc;
 
 pub use alloc::format;
@@ -39,7 +39,8 @@ pub fn init(boot_info: &'static BootInfo) {
     interrupt::init(); // init interrupts
     clock::init(boot_info); // init clock (uefi service)
     memory::init(boot_info); // init memory manager
-    proc::init(boot_info); // init process manager
+    memory::user::init(); // init user heap allocator
+    proc::init(boot_info); // init task manager
     input::init(); // init input
 
     x86_64::instructions::interrupts::enable();
@@ -48,21 +49,9 @@ pub fn init(boot_info: &'static BootInfo) {
     info!("YatSenOS initialized.");
 }
 
-// pub fn stack_thread_test() {
-//     let pid = proc::spawn_kernel_thread(
-//         utils::func::stack_test,
-//         alloc::string::String::from("stack"),
-//         None,
-//     );
-
-//     wait(pid);
-// }
-
-pub fn wait(pid: proc::ProcessId) {
+pub fn wait(init: proc::ProcessId) {
     loop {
-        let ret = proc::wait_pid(pid);
-        print!("wait_pid({}) = {}\n", pid, ret);
-        if ret == -1 {
+        if proc::still_alive(init) {
             x86_64::instructions::hlt();
         } else {
             break;
@@ -80,11 +69,3 @@ pub fn shutdown(boot_info: &'static BootInfo) -> ! {
         );
     }
 }
-
-// pub fn new_test_thread(id: &str) -> proc::ProcessId {
-//     proc::spawn_kernel_thread(
-//         utils::func::test,
-//         format!("#{}_test", id),
-//         Some(proc::ProcessData::new().set_env("id", id)),
-//     )
-// }

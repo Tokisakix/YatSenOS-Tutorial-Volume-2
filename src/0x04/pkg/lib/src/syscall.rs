@@ -1,3 +1,4 @@
+use chrono::naive::*;
 use syscall_def::Syscall;
 
 #[inline(always)]
@@ -31,11 +32,8 @@ pub fn sys_read(fd: u8, buf: &mut [u8]) -> Option<usize> {
 }
 
 #[inline(always)]
-pub fn sys_wait_pid(pid: u16) -> isize {
-    // FIXME: try to get the return value for process
-    //        loop & halt until the process is finished
-
-    0
+pub fn sys_allocate(layout: &core::alloc::Layout) -> *mut u8 {
+    syscall!(Syscall::Allocate, layout as *const _) as *mut u8
 }
 
 #[inline(always)]
@@ -44,18 +42,36 @@ pub fn sys_list_app() {
 }
 
 #[inline(always)]
-pub fn sys_stat() {
-    syscall!(Syscall::Stat);
-}
-
-#[inline(always)]
-pub fn sys_allocate(layout: &core::alloc::Layout) -> *mut u8 {
-    syscall!(Syscall::Allocate, layout as *const _) as *mut u8
-}
-
-#[inline(always)]
 pub fn sys_deallocate(ptr: *mut u8, layout: &core::alloc::Layout) -> usize {
     syscall!(Syscall::Deallocate, ptr, layout as *const _)
+}
+
+#[inline(always)]
+pub fn sys_exit(code: usize) -> ! {
+    syscall!(Syscall::Exit, code);
+    unreachable!();
+}
+
+#[inline(always)]
+pub fn sys_wait_pid(pid: u16) -> isize {
+    loop {
+        let ret = syscall!(Syscall::WaitPid, pid as u64) as isize;
+        if !ret.is_negative() {
+            return ret;
+        }
+    }
+}
+
+#[inline(always)]
+pub fn sys_time() -> NaiveDateTime {
+    let time = syscall!(Syscall::Time) as i64;
+    const BILLION: i64 = 1_000_000_000;
+    NaiveDateTime::from_timestamp_opt(time / BILLION, (time % BILLION) as u32).unwrap_or_default()
+}
+
+#[inline(always)]
+pub fn sys_stat() {
+    syscall!(Syscall::Stat);
 }
 
 #[inline(always)]
@@ -64,7 +80,11 @@ pub fn sys_spawn(path: &str) -> u16 {
 }
 
 #[inline(always)]
-pub fn sys_exit(code: isize) -> ! {
-    syscall!(Syscall::Exit, code as u64);
-    unreachable!("This process should be terminated by now.")
+pub fn sys_get_pid() -> u16 {
+    syscall!(Syscall::GetPid) as u16
+}
+
+#[inline(always)]
+pub fn sys_kill(pid: u16) {
+    syscall!(Syscall::Kill, pid as u64);
 }

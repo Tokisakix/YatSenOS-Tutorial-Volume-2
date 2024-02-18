@@ -12,14 +12,16 @@ use manager::*;
 use paging::*;
 use process::*;
 
-use alloc::string::String;
 pub use context::ProcessContext;
 pub use data::ProcessData;
 pub use pid::ProcessId;
 use xmas_elf::ElfFile;
 
+use alloc::string::{String, ToString};
 use x86_64::structures::idt::PageFaultErrorCode;
 use x86_64::VirtAddr;
+
+use crate::Resource;
 
 // 0xffff_ff00_0000_0000 is the kernel's address space
 pub const STACK_MAX: u64 = 0x0000_4000_0000_0000;
@@ -62,9 +64,7 @@ pub enum ProgramStatus {
 
 /// init process manager
 pub fn init(boot_info: &'static boot::BootInfo) {
-    let stack_bot = VirtAddr::new(KSTACK_INIT_BOT);
-    let mut kproc_data = ProcessData::new();
-    kproc_data.set_stack(stack_bot, KSTACK_DEF_PAGE);
+    let kproc_data = ProcessData::new().set_stack(KSTACK_INIT_BOT, KSTACK_DEF_PAGE);
 
     trace!("Init process data: {:#?}", kproc_data);
 
@@ -76,6 +76,7 @@ pub fn init(boot_info: &'static boot::BootInfo) {
         Some(kproc_data),
     );
 
+    kproc.write().resume();
     let app_list = boot_info.loaded_apps.as_ref();
     manager::init(kproc, app_list);
 
@@ -85,35 +86,16 @@ pub fn init(boot_info: &'static boot::BootInfo) {
 pub fn switch(context: &mut ProcessContext) {
     x86_64::instructions::interrupts::without_interrupts(|| {
         let manager = get_process_manager();
-        manager.save_current(context);
+        let pid = manager.save_current(context);
+        manager.push_ready(pid);
         manager.switch_next(context);
     });
 }
-
-// pub fn spawn_kernel_thread(entry: fn() -> !, name: String, data: Option<ProcessData>) -> ProcessId {
-//     x86_64::instructions::interrupts::without_interrupts(|| {
-//         let entry = VirtAddr::new(entry as usize as u64);
-//         get_process_manager().spawn_kernel_thread(entry, name, data)
-//     })
-// }
 
 pub fn print_process_list() {
     x86_64::instructions::interrupts::without_interrupts(|| {
         get_process_manager().print_process_list();
     })
-}
-
-pub fn process_exit(ret: isize) -> ! {
-    x86_64::instructions::interrupts::without_interrupts(|| {
-        let manager = get_process_manager();
-        manager.kill_current(ret);
-    });
-
-    loop {
-        unsafe {
-            core::arch::asm!("hlt");
-        }
-    }
 }
 
 pub fn env(key: &str) -> Option<String> {
@@ -122,18 +104,87 @@ pub fn env(key: &str) -> Option<String> {
     })
 }
 
+pub fn process_exit(ret: isize, context: &mut ProcessContext) {
+    x86_64::instructions::interrupts::without_interrupts(|| {
+        let manager = get_process_manager();
+        manager.kill_self(ret);
+        manager.switch_next(context);
+    })
+}
+
 pub fn wait_pid(pid: ProcessId) -> isize {
     x86_64::instructions::interrupts::without_interrupts(|| get_process_manager().wait_pid(pid))
+}
+
+pub fn handle(fd: u8) -> Option<Resource> {
+    x86_64::instructions::interrupts::without_interrupts(|| {
+        get_process_manager().current().read().handle(fd)
+    })
+}
+
+pub fn close(fd: u8) -> bool {
+    x86_64::instructions::interrupts::without_interrupts(|| get_process_manager().close(fd))
+}
+
+pub fn still_alive(pid: ProcessId) -> bool {
+    x86_64::instructions::interrupts::without_interrupts(|| get_process_manager().wait_pid(pid) < 0)
+}
+
+pub fn current_pid() -> ProcessId {
+    x86_64::instructions::interrupts::without_interrupts(processor::current_pid)
+}
+
+pub fn kill(pid: ProcessId, context: &mut ProcessContext) {
+    x86_64::instructions::interrupts::without_interrupts(|| {
+        let manager = get_process_manager();
+        if pid == processor::current_pid() {
+            manager.kill_self(0xdead);
+            manager.switch_next(context);
+        } else {
+            manager.kill(pid, 0xdead);
+        }
+    })
+}
+
+pub fn spawn(name: &str) -> Result<ProcessId, String> {
+    let app = x86_64::instructions::interrupts::without_interrupts(|| {
+        let app_list = get_process_manager().app_list()?;
+
+        app_list.iter().find(|&app| app.name.eq(name))
+    });
+
+    if app.is_none() {
+        return Err(format!("App not found: {}", name));
+    };
+
+    elf_spawn(name.to_string(), &app.unwrap().elf)
+}
+
+pub fn elf_spawn(name: String, elf: &ElfFile) -> Result<ProcessId, String> {
+    let pid = x86_64::instructions::interrupts::without_interrupts(|| {
+        let manager = get_process_manager();
+        let process_name = name.to_lowercase();
+
+        let parent = Arc::downgrade(&manager.current());
+        let proc_data = ProcessData::new();
+
+        let pid = manager.spawn(elf, name, Some(parent), Some(proc_data));
+
+        debug!("Spawned process: {}#{}", process_name, pid);
+        pid
+    });
+
+    Ok(pid)
+}
+
+pub fn current_proc_info() {
+    debug!("{:#?}", get_process_manager().current())
 }
 
 pub fn handle_page_fault(addr: VirtAddr, err_code: PageFaultErrorCode) -> bool {
     x86_64::instructions::interrupts::without_interrupts(|| {
         get_process_manager().handle_page_fault(addr, err_code)
     })
-}
-
-pub fn current_process_info() {
-    debug!("{:#?}", get_process_manager().current())
 }
 
 pub fn list_app() {
@@ -153,27 +204,4 @@ pub fn list_app() {
 
         println!(">>> App list: {}", apps);
     });
-}
-
-pub fn spawn(name: &str) -> Option<ProcessId> {
-    let app = x86_64::instructions::interrupts::without_interrupts(|| {
-        let app_list = get_process_manager().app_list()?;
-        app_list.iter().find(|&app| app.name.eq(name))
-    });
-
-    elf_spawn(alloc::string::ToString::to_string(&name), &app.unwrap().elf)
-}
-
-pub fn elf_spawn(name: String, elf: &ElfFile) -> Option<ProcessId> {
-    let pid = x86_64::instructions::interrupts::without_interrupts(|| {
-        let manager = get_process_manager();
-        let process_name = name.to_lowercase();
-        let parent = Arc::downgrade(&manager.current());
-        let pid = manager.spawn(elf, name, Some(parent), None);
-
-        debug!("Spawned process: {}#{}", process_name, pid);
-        pid
-    });
-
-    Some(pid)
 }

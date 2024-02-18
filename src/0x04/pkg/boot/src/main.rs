@@ -51,6 +51,14 @@ fn efi_main(image: uefi::Handle, mut system_table: SystemTable<Boot>) -> Status 
         ENTRY = elf.header.pt2.entry_point() as usize;
     }
 
+    let apps = if config.load_apps {
+        info!("Loading apps...");
+        Some(load_apps(system_table.boot_services()))
+    } else {
+        info!("Skip loading apps");
+        None
+    };
+
     // 3. Load MemoryMap
     let max_mmap_size = system_table.boot_services().memory_map_size();
     let mmap_storage = Box::leak(
@@ -88,6 +96,7 @@ fn efi_main(image: uefi::Handle, mut system_table: SystemTable<Boot>) -> Status 
         config.physical_memory_offset,
         &mut page_table,
         &mut UEFIFrameAllocator(bs),
+        false,
     )
     .expect("Failed to load ELF");
 
@@ -110,6 +119,7 @@ fn efi_main(image: uefi::Handle, mut system_table: SystemTable<Boot>) -> Status 
         stack_size,
         &mut page_table,
         &mut UEFIFrameAllocator(bs),
+        false,
     )
     .expect("Failed to map stack");
 
@@ -119,14 +129,6 @@ fn efi_main(image: uefi::Handle, mut system_table: SystemTable<Boot>) -> Status 
     }
 
     free_elf(bs, elf);
-
-    let apps = if config.load_apps {
-        info!("Loading apps...");
-        Some(load_apps(system_table.boot_services()))
-    } else {
-        info!("Skip loading apps");
-        None
-    };
 
     // 5. Exit boot and jump to ELF entry
     info!("Exiting boot services...");
@@ -139,8 +141,8 @@ fn efi_main(image: uefi::Handle, mut system_table: SystemTable<Boot>) -> Status 
         memory_map: mmap.entries().copied().collect(),
         physical_memory_offset: config.physical_memory_offset,
         system_table: runtime,
-        log_level: config.log_level,
         loaded_apps: apps,
+        log_level: config.log_level,
     };
 
     // align stack to 8 bytes

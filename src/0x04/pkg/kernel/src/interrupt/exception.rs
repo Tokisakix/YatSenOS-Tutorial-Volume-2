@@ -146,7 +146,7 @@ pub extern "x86-interrupt" fn page_fault_handler(
             Cr2::read(),
             stack_frame
         );
-        crate::proc::current_process_info();
+        crate::proc::current_proc_info();
         panic!("Cannot handle page fault!");
     }
 }

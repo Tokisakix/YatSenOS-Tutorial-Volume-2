@@ -3,6 +3,9 @@ mod clock;
 mod consts;
 mod exception;
 mod serial;
+mod syscall;
+
+pub use syscall::SyscallArgs;
 
 use crate::memory::physical_to_virtual;
 use apic::*;
@@ -15,6 +18,7 @@ lazy_static! {
             exception::reg_idt(&mut idt);
             serial::reg_idt(&mut idt);
             clock::reg_idt(&mut idt);
+            syscall::reg_idt(&mut idt);
         }
         idt
     };

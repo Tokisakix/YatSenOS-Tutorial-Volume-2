@@ -53,9 +53,9 @@ impl ProcessContext {
         self.value.stack_frame.cpu_flags =
             (RFlags::IOPL_HIGH | RFlags::IOPL_LOW | RFlags::INTERRUPT_FLAG).bits();
 
-            let selector = get_user_selector();
-            self.value.stack_frame.code_segment = selector.user_code_selector.0 as u64;
-            self.value.stack_frame.stack_segment = selector.user_data_selector.0 as u64;
+        let selector = get_user_selector();
+        self.value.stack_frame.code_segment = selector.user_code_selector.0 as u64;
+        self.value.stack_frame.stack_segment = selector.user_data_selector.0 as u64;
 
         trace!("Init stack frame: {:#?}", &self.stack_frame);
     }

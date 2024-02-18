@@ -12,16 +12,20 @@ const USER_HEAP_PAGE: usize = USER_HEAP_SIZE / crate::memory::PAGE_SIZE as usize
 
 pub static USER_ALLOCATOR: LockedHeap = LockedHeap::empty();
 
-// NOTE: export mod user / call in the kernel init / after frame allocator
 pub fn init() {
     init_user_heap().expect("User Heap Initialization Failed.");
     info!("User Heap Initialized.");
 }
 
 pub fn init_user_heap() -> Result<(), MapToError<Size4KiB>> {
+    let mapper = &mut *super::get_page_table_for_sure();
+    let frame_allocator = &mut *super::get_frame_alloc_for_sure();
+
     let page_range = {
-        // FIXME: get heap page range by constants
-        //       - Page::range(start, end)
+        let heap_start = VirtAddr::new(USER_HEAP_START as u64);
+        let heap_start_page = Page::containing_address(heap_start);
+        let heap_end_page = heap_start_page + USER_HEAP_PAGE as u64 - 1u64;
+        Page::range(heap_start_page, heap_end_page)
     };
 
     debug!(
@@ -30,12 +34,16 @@ pub fn init_user_heap() -> Result<(), MapToError<Size4KiB>> {
         page_range.end.start_address().as_u64()
     );
 
-    let mapper = &mut *super::get_page_table_for_sure();
-    let frame_allocator = &mut *super::get_frame_alloc_for_sure();
+    let (size, unit) = super::humanized_size(USER_HEAP_SIZE as u64);
+    info!("User Heap Size   : {:>7.*} {}", 3, size, unit);
 
     for page in page_range {
-        // FIXME: allocate new frame
-        // FIXME: map the page to the frame (R/W/User Access)
+        let frame = frame_allocator
+            .allocate_frame()
+            .ok_or(MapToError::FrameAllocationFailed)?;
+        let flags =
+            PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::USER_ACCESSIBLE;
+        unsafe { mapper.map_to(page, frame, flags, frame_allocator)?.flush() };
     }
 
     unsafe {

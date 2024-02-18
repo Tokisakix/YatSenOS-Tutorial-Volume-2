@@ -2,10 +2,12 @@
 
 #[macro_use]
 extern crate log;
+extern crate alloc;
 
 use core::ptr::{copy_nonoverlapping, write_bytes};
 
-use x86_64::structures::paging::page::PageRange;
+use alloc::vec::Vec;
+use x86_64::structures::paging::page::{PageRange, PageRangeInclusive};
 use x86_64::structures::paging::{mapper::*, *};
 use x86_64::{align_up, PhysAddr, VirtAddr};
 use xmas_elf::{program, ElfFile};
@@ -43,6 +45,7 @@ pub fn map_range(
     count: u64,
     page_table: &mut impl Mapper<Size4KiB>,
     frame_allocator: &mut impl FrameAllocator<Size4KiB>,
+    user_access: bool,
 ) -> Result<PageRange, MapToError<Size4KiB>> {
     let range_start = Page::containing_address(VirtAddr::new(addr));
     let range_end = range_start + count;
@@ -53,7 +56,11 @@ pub fn map_range(
         count
     );
 
-    let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE;
+    let mut flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE;
+
+    if user_access {
+        flags |= PageTableFlags::USER_ACCESSIBLE;
+    }
 
     for page in Page::range(range_start, range_end) {
         let frame = frame_allocator
@@ -78,6 +85,50 @@ pub fn map_range(
     Ok(Page::range(range_start, range_end))
 }
 
+/// Unmap a range of memory
+///
+/// unmap specified address and deallocate frames
+pub fn unmap_range(
+    addr: u64,
+    pages: u64,
+    page_table: &mut impl Mapper<Size4KiB>,
+    frame_deallocator: &mut impl FrameDeallocator<Size4KiB>,
+    do_dealloc: bool,
+) -> Result<(), UnmapError> {
+    trace!("Unmapping stack at {:#x}", addr);
+
+    let range_start = Page::containing_address(VirtAddr::new(addr));
+
+    trace!(
+        "Mem range hint: {:#x} -> {:#x}",
+        addr,
+        page_table
+            .translate_page(range_start)
+            .unwrap()
+            .start_address()
+    );
+
+    let range_end = range_start + pages;
+
+    trace!(
+        "Page Range: {:?}({})",
+        Page::range(range_start, range_end),
+        pages
+    );
+
+    for page in Page::range(range_start, range_end) {
+        let info = page_table.unmap(page)?;
+        if do_dealloc {
+            unsafe {
+                frame_deallocator.deallocate_frame(info.0);
+            }
+        }
+        info.1.flush();
+    }
+
+    Ok(())
+}
+
 /// Load & Map ELF file
 ///
 /// load segments in ELF file to new frames and set page table
@@ -86,26 +137,25 @@ pub fn load_elf(
     physical_offset: u64,
     page_table: &mut impl Mapper<Size4KiB>,
     frame_allocator: &mut impl FrameAllocator<Size4KiB>,
-) -> Result<(), MapToError<Size4KiB>> {
+    user_access: bool,
+) -> Result<Vec<PageRangeInclusive>, MapToError<Size4KiB>> {
     let file_buf = elf.input.as_ptr();
 
     trace!("Loading ELF file...{:?}", file_buf);
 
-    for segment in elf.program_iter() {
-        if segment.get_type().unwrap() != program::Type::Load {
-            continue;
-        }
-
-        load_segment(
-            file_buf,
-            physical_offset,
-            &segment,
-            page_table,
-            frame_allocator,
-        )?
-    }
-
-    Ok(())
+    elf.program_iter()
+        .filter(|segment| segment.get_type().unwrap() == program::Type::Load)
+        .map(|segment| {
+            load_segment(
+                file_buf,
+                physical_offset,
+                &segment,
+                page_table,
+                frame_allocator,
+                user_access,
+            )
+        })
+        .collect()
 }
 
 /// Load & Map ELF segment
@@ -117,7 +167,8 @@ fn load_segment(
     segment: &program::ProgramHeader,
     page_table: &mut impl Mapper<Size4KiB>,
     frame_allocator: &mut impl FrameAllocator<Size4KiB>,
-) -> Result<(), MapToError<Size4KiB>> {
+    user_access: bool,
+) -> Result<PageRangeInclusive, MapToError<Size4KiB>> {
     trace!("Loading & mapping segment: {:#x?}", segment);
 
     let mem_size = segment.mem_size();
@@ -134,6 +185,10 @@ fn load_segment(
 
     if flags.is_write() {
         page_table_flags |= PageTableFlags::WRITABLE;
+    }
+
+    if user_access {
+        page_table_flags |= PageTableFlags::USER_ACCESSIBLE;
     }
 
     trace!("Segment page table flag: {:?}", page_table_flags);
@@ -212,5 +267,6 @@ fn load_segment(
         }
     }
 
-    Ok(())
+    let end_page = Page::containing_address(virt_start_addr + mem_size - 1u64);
+    Ok(Page::range_inclusive(start_page, end_page))
 }

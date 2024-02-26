@@ -13,7 +13,7 @@ fn efi_main(image: uefi::Handle, mut system_table: SystemTable<Boot>) -> Status 
     uefi_services::init(&mut system_table).expect("Failed to initialize utilities");
     log::set_max_level(log::LevelFilter::Info);
 
-    let std_num = "22****09";
+    let std_num = "22331109";
 
     loop {
         info!("Hello World from UEFI bootloader! @ {}", std_num);

@@ -14,7 +14,21 @@
 
 在不同的操作系统中，进程模型的设计各有千秋。在 macOS xnu 和 Windows NT 内核中，线程是调度执行的基本单位，进程是资源分配的基本单位，线程通过共享进程所描述的一系列资源来互相协作。而在 Linux 内核中，没有线程的相关概念，而进程也同时是调度执行的基本单位，通过一些特殊的机制来实现进程间的协作和资源共享。有关进程模型的区别、设计在理论课上有详细的讲解，这里不再赘述。
 
+<<<<<<< HEAD
 进程的实现和调度是（抢占式）操作系统的核心，在本实验所要实现的操作系统中将采用和 Linux 设计相近的进程模型设计理念，即进程也是被调度的单位。下图是本实验的进程模型设计示意图。**实验并不会一次将它完全实现，很多部分将在未来的实验中逐步补全，在这里希望大家能有一个整体性的理解，并在实现的过程中明确自己当前在做什么**：
+=======
+进程的实现和调度是（抢占式）操作系统的核心，在本实验所要实现的操作系统中将采用和 Linux 设计相近的进程模型设计理念，即进程也是被调度的单位。下图是本实验的进程模型设计示意图。
+
+**实验并不会一次将它完全实现，很多部分将在未来的实验中逐步补全，在这里希望大家能有一个整体性的理解，并在实现的过程中明确自己当前在做什么**：
+
+!!! warning "实验须知"
+
+    1. 本次实验为后续实验的核心基础，是个难啃的骨头！
+
+    2. 强烈建议在进行本次实验前，先阅读完本次实验的所有文档，了解本次实验的实验内容。
+
+    3. 推荐根据给出的思维导图，将给出的代码浏览一遍，对代码结构有一个整体性的认识。
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
 
 ![](../assets/proc.png)
 
@@ -113,13 +127,25 @@ as_handler!(teapot);
 
 ```rust
 #[repr(C)]
+<<<<<<< HEAD
+=======
+pub struct ProcessContext {
+    value: ProcessContextValue,
+}
+
+#[repr(C)]
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
 pub struct ProcessContextValue {
     pub regs: RegistersValue,
     pub stack_frame: InterruptStackFrameValue,
 }
 ```
 
+<<<<<<< HEAD
 这里的 `ProcessContextValue` 命名和相关的保护处理方法来自 `InterruptStackFrame` 的内部实现，用以防止意外的修改及其导致的非预期行为。
+=======
+`ProcessContext` 实现了内部 `value` 的 `Deref` trait，因此可以直接使用 `ProcessContextValue` 中的字段内容。而 `ProcessContextValue` 相关的保护处理方法参考并实现自 `InterruptStackFrame` 的内部实现，用以防止意外的修改及其导致的非预期行为。
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
 
 `repr(C)` 用于指定使用 C 语言的结构体布局，以便于在汇编代码中正确处理结构体的字段。
 
@@ -282,7 +308,11 @@ pub fn new(init: Arc<Process>) -> Self {
 
     内核栈的起始地址通过配置文件被定义在了 `0xFFFFFF0100000000`，距离内核起始地址 4GiB。默认大小为 512 个 4KiB 的页面，即 2MiB。
 
+<<<<<<< HEAD
     在虚拟内存的规划中，任意进程的栈地址空间大小为 4GiB。以内核为例，内核栈的起始地址为 `0xFFFFFF0100000000`，结束地址为 `0xFFFFFF0200000000`。
+=======
+    在虚拟内存的规划中，任意进程的栈地址空间大小为 4GiB。以内核为例，内核栈所对应的内存区域的起始地址为 `0xFFFFFF0100000000`，结束地址为 `0xFFFFFF0200000000`。
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
 
     !!! note "缺页异常？"
 
@@ -303,7 +333,11 @@ pub const STACK_MAX_SIZE: u64 = STACK_MAX_PAGES * PAGE_SIZE;
 
 `STACK_MAX_SIZE` 定义了每个进程栈的最大大小，这里定义为 4GiB，即 `0x100000` 个页面。
 
+<<<<<<< HEAD
 作为一个常识：栈的增长方向是向下的，即在进行 `push` 操作时，栈指针会减小。因此，栈的起始地址应当是栈的最大地址，而栈的结束地址应当是栈的最小地址。
+=======
+作为一个常识：栈的增长方向是向下的，即在进行 `push` 操作时，栈指针会减小。因此，栈总是从最大地址开始，向更小的地址空间“增长”。
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
 
 在本次实验中，笔者带领大家做一个临时的、取巧的实现：根据进程的 PID 来为进程分配对应的栈空间。
 
@@ -328,7 +362,11 @@ pub const STACK_START_MASK: u64 = !(STACK_MAX_SIZE - 1);
 pub const STACK_DEF_PAGE: u64 = 1;
 pub const STACK_DEF_SIZE: u64 = STACK_DEF_PAGE * PAGE_SIZE;
 
+<<<<<<< HEAD
 pub const STACT_INIT_BOT: u64 = STACK_MAX - STACK_DEF_SIZE;
+=======
+pub const STACK_INIT_BOT: u64 = STACK_MAX - STACK_DEF_SIZE;
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
 pub const STACK_INIT_TOP: u64 = STACK_MAX - 8;
 ```
 
@@ -336,7 +374,11 @@ pub const STACK_INIT_TOP: u64 = STACK_MAX - 8;
 
 `STACK_DEF_PAGE` 定义了栈的默认大小，这里定义为 1 个 4KiB 的页面。
 
+<<<<<<< HEAD
 `STACT_INIT_BOT` 定义了初始化栈的底部地址，它是栈的最大地址减去默认大小。
+=======
+`STACK_INIT_BOT` 定义了初始化栈的底部地址，它是栈的最大地址减去默认大小。
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
 
 `STACK_INIT_TOP` 定义了初始化栈的顶部地址，它是栈的最大地址减去 8，这是为了进行内存对齐，保证 `rsp` 和 `rbp` 寄存器总是 8 的倍数。
 
@@ -356,6 +398,11 @@ pub const STACK_INIT_TOP: u64 = STACK_MAX - 8;
 +---------------------+
 ```
 
+<<<<<<< HEAD
+=======
+!!! tip "**以 PID 2 为例：<br/>初始化分配的栈的页面为 `0x3FFEFFFFF000` 到 `0x3FFF00000000`（区间左闭右开）<br/>默认栈顶地址为 `0x3FFEFFFFFFF8`**"
+
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
 有关于用户进程的其他部分内存布局的说明，将在下一次实验中详细讨论。
 
 !!! note "在了解了内存布局的设计目的之后，或许你可以自己设计内存布局……"
@@ -403,7 +450,13 @@ pub const STACK_INIT_TOP: u64 = STACK_MAX - 8;
 
 ## 进程管理器的初始化
 
+<<<<<<< HEAD
 在 `src/utils/mod.rs` 中，可以看到待补全的 `init` 函数，这个函数将内核包装成进程，并将其传递给 `ProcessManager`，使其成为第一个进程。
+=======
+在 `src/proc/mod.rs` 中，可以看到待补全的 `init` 函数，这个函数将内核包装成进程，并将其传递给 `ProcessManager`，使其成为第一个进程。
+
+!!! note "记得在 `src/lib.rs` 中使用 `pub mod proc` 引用进程模块，并在 `crate::init` 函数中调用 `proc::init` 函数（位于内存初始化之后、启用中断之前）"
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
 
 1. 设置内核相关信息
 
@@ -415,8 +468,14 @@ pub const STACK_INIT_TOP: u64 = STACK_MAX - 8;
 
     调用 `Process::new` 函数，创建内核进程，它会返回一个 `Process` 的智能指针。
 
+<<<<<<< HEAD
     - 内核进程没有父进程，可以直接传入 `None`。
     - 内核进程的页表就是当前 `Cr3` 寄存器的内容，使用 `PageTableContext::new()` 进行加载。
+=======
+    - 在上述的假设中，实验使用 `0` 表示无进程（正在运行），内核进程的 PID 应为 `1`。
+    - 内核进程没有父进程，可以直接传入 `None`。
+    - 内核进程的页表就是当前 `Cr3` 寄存器的内容，使用 `PageTableContext::new()` 加载。
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
 
 3. 内核进程的初始化状态
 
@@ -426,11 +485,23 @@ pub const STACK_INIT_TOP: u64 = STACK_MAX - 8;
 
 ## 进程调度的实现
 
+<<<<<<< HEAD
 修改时钟中断的内容，移除上次实验中的计数器等模块。利用 `as_handler` 宏重新定义中断处理函数，在其中调用 `crate::proc::switch` 函数，进行进程调度切换。
 
 之后在 `src/proc/mod.rs` 中，补全 `switch` 函数的实现，利用进程管理器所提供的功能，补全 `save_current` 和 `switch_next` 函数。
 
 时钟中断的处理过程在上文中已经有所提及，请尝试实现处理过程。注意以下实现要点：
+=======
+修改时钟中断的内容，移除上次实验中的计数器等模块，并参考 `DOUBLE_FAULT_IST_INDEX` 的分配处理和声明，**在 TSS 中声明一块新的中断处理栈，并将它加载到时钟中断的 IDT 中**。
+
+!!! question "为什么需要为时钟中断分配独立的栈空间？尝试回答思考题 3。"
+
+利用 `as_handler` 宏重新定义中断处理函数，在其中调用 `crate::proc::switch` 函数，进行进程调度切换。
+
+之后在 `src/proc/mod.rs` 中，补全 `switch` 函数的实现，利用进程管理器所提供的功能，补全 `save_current` 和 `switch_next` 函数。
+
+**时钟中断的处理过程在上文中已经有所提及，请尝试实现处理过程。**注意以下实现要点：
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
 
 1. 在合适的时机更新进程状态、并将被暂停进程的 PID 使用 `push_ready` 函数放入就绪队列。
 2. `switch_next` 在未来需要处理进程阻塞和进程死亡的情况，思考如何避免副作用，使这一函数的功能仅限于“切换到下一个进程”。
@@ -438,7 +509,21 @@ pub const STACK_INIT_TOP: u64 = STACK_MAX - 8;
 4. 你可以通过 `drop` 函数在合适的时候主动释放取得的锁。
 5. 你可以通过 `print_process_list` 函数，在合适的情况下打印进程列表，或降低时钟中断的触发频率，从而便于调试。
 
+<<<<<<< HEAD
 !!! tip "阶段性成果"
+=======
+!!! question "如何获得一个关闭中断的上下文？"
+
+    可以使用 `without_interrupts` 函数来处理中断的开关，它接受一个闭包作为参数，这个闭包中的代码将会在关闭中断的情况下执行。
+
+    ```rust
+    x86_64::instructions::interrupts::without_interrupts(|| {
+        // do something
+    })
+    ```
+
+!!! success "阶段性成果"
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
 
     在成功实现进程调度后，你应当可以观察到内核进程不断被调度，并继续执行的情况。
 
@@ -474,7 +559,11 @@ pub const STACK_INIT_TOP: u64 = STACK_MAX - 8;
 
 ```rust
 pub fn new_test_thread(id: &str) -> ProcessId {
+<<<<<<< HEAD
     let proc_data = ProcessData::new();
+=======
+    let mut proc_data = ProcessData::new();
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
     proc_data.set_env("id", id);
 
     crate::proc::spawn_kernel_thread(
@@ -489,13 +578,29 @@ pub fn new_test_thread(id: &str) -> ProcessId {
 
 在 `src/proc/process.rs` 中，根据你的内存布局预设和当前进程的 PID，为其分配初始栈空间。
 
+<<<<<<< HEAD
 参考 bootloader 中为内核分配栈空间的代码，克隆内核页表，映射新的页面。你可以使用 `get_frame_alloc_for_sure()` 来获得内核的帧分配器。在完成栈分配后，将栈顶地址返回。
+=======
+参考 bootloader 中为内核分配栈空间的代码，克隆内核页表，使用 `elf::map_range` 函数来进行新的页面的映射。完成栈分配后，将栈顶地址返回。
+
+!!! note "获取内核的帧分配器"
+
+    可以通过 `get_frame_alloc_for_sure` 函数来获取能够传递给 `elf::map_range` 的 `&mut impl FrameAllocator<Size4KiB>` 类型的参数：
+
+    ```rust
+    let frame_allocator = &mut *get_frame_alloc_for_sure();
+    ```
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
 
 在获取了栈顶地址、待执行函数的入口地址后，将它们放入初始化的进程栈帧中。你可以修改或添加函数，利用 `ProcessContext` 的 `init_stack_frame` 函数来完成这一操作。
 
 最后，将全新创建的进程放入进程管理器和就绪队列中，使其能够被调度执行。
 
+<<<<<<< HEAD
 !!! tip "阶段性成果"
+=======
+!!! success "阶段性成果"
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
 
     在成功实现内核线程的创建后，尝试在 `kernel_main` 中使用 `test` 命令来创建多个内核线程，它们应当被并发地调度执行。
 
@@ -566,14 +671,21 @@ pub extern "x86-interrupt" fn page_fault_handler(
 
     分配新的页面、更新页表、更新进程数据中的栈信息。
 
+<<<<<<< HEAD
     *HINT：继续使用 `elf::map_range` 函数来进行新的页面的映射。*
 
+=======
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
 !!! note "关于页面的记录与处理"
 
     - 你可以使用 `Page::<Size4KiB>::containing_address(addr)` 来获取一个地址所在的页面。
     - `PageRange` 结构体是**前闭后开**的，即 `start..end` 表示的是 `[start, end)` 的页面范围。你可以访问其 `start` 和 `end` 字段来获取页面范围的起始和结束页。
     - 页面 `Page` 之间可以进行减运算，它们的结果是 `u64`，表示两个页面之间的页面数量。
     - 使用 `PageTableContext` 的 `mapper()` 函数获取 `map_range` 函数所需的 `page_table` 参数。
+<<<<<<< HEAD
+=======
+    - 越权访问可以使用 `PageFaultErrorCode::PROTECTION_VIOLATION` 访问对应标志位。
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
 
 ## 进程的退出
 
@@ -591,7 +703,11 @@ pub extern "x86-interrupt" fn page_fault_handler(
 
 3. 存储进程的返回值，以便其他进程可以利用它来查询进程的退出状态。
 
+<<<<<<< HEAD
 !!! tip "阶段性成果"
+=======
+!!! success "阶段性成果"
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
 
     在成功实现缺页异常的处理后，尝试在 `kernel_main` 中使用 `stack` 命令来创建一个栈使用很大的内核线程，而它应当被正确地处理，不会导致进程的崩溃。
 
@@ -603,4 +719,8 @@ pub extern "x86-interrupt" fn page_fault_handler(
 
 2. 在 `src/proc/process.rs` 中，有两次实现 `Deref` 和一次实现 `DerefMut` 的代码，它们分别是为了什么？使用这种方式提供了什么便利？
 
+<<<<<<< HEAD
 ## 加分项
+=======
+3. 中断的处理过程默认是不切换栈的，即在中断发生前的栈上继续处理中断过程，为什么在处理**缺页异常和时钟中断**时需要切换栈？如果不为它们切换栈会分别带来哪些问题？请假设具体的场景、或通过实际尝试进行回答。
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4

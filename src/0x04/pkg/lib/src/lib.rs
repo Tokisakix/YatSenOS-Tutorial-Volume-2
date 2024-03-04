@@ -1,7 +1,14 @@
+<<<<<<< HEAD
 #![allow(dead_code)]
 #![feature(panic_info_message)]
 #![feature(alloc_error_handler)]
 #![cfg_attr(not(test), no_std)]
+=======
+#![cfg_attr(not(test), no_std)]
+#![allow(dead_code, unused_imports)]
+#![feature(panic_info_message)]
+#![feature(alloc_error_handler)]
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
 
 #[macro_use]
 pub mod macros;
@@ -15,15 +22,23 @@ pub mod allocator;
 pub extern crate alloc;
 
 mod syscall;
+<<<<<<< HEAD
 mod utils;
+=======
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
 
 use core::fmt::*;
 
 pub use alloc::*;
+<<<<<<< HEAD
 pub use chrono::*;
 pub use io::*;
 pub use syscall::*;
 pub use utils::*;
+=======
+pub use io::*;
+pub use syscall::*;
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
 
 #[macro_export]
 macro_rules! print {

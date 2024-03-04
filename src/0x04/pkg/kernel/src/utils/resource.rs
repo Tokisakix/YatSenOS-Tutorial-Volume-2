@@ -1,7 +1,10 @@
 use alloc::string::String;
+<<<<<<< HEAD
 use pc_keyboard::DecodedKey;
 
 use crate::input::try_get_key;
+=======
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
 
 #[derive(Debug, Clone)]
 pub enum StdIO {
@@ -21,6 +24,7 @@ impl Resource {
         match self {
             Resource::Console(stdio) => match stdio {
                 &StdIO::Stdin => {
+<<<<<<< HEAD
                     return if buf.len() < 4 {
                         Some(0)
                     } else {
@@ -32,6 +36,10 @@ impl Resource {
                             Some(0)
                         }
                     };
+=======
+                    // FIXME: just read from kernel input buffer
+                    Some(0)
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
                 }
                 _ => None,
             },

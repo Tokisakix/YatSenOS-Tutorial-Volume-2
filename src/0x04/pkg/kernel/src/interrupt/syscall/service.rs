@@ -5,8 +5,43 @@ use crate::utils::*;
 
 use super::SyscallArgs;
 
+<<<<<<< HEAD
 pub fn sys_clock() -> i64 {
     clock::now().timestamp_nanos_opt().unwrap_or_default()
+=======
+pub fn spawn_process(args: &SyscallArgs) -> usize {
+    // FIXME: get app name by args
+    //       - core::str::from_utf8_unchecked
+    //       - core::slice::from_raw_parts
+    // FIXME: spawn the process by name
+    // FIXME: handle spawn error, return 0 if failed
+    // FIXME: return pid as usize
+
+    0
+}
+
+pub fn sys_write(args: &SyscallArgs) -> usize {
+    // FIXME: get handle by fd
+    // FIXME: handle read from fd & return length
+    //       - core::slice::from_raw_parts
+    // FIXME: return 0 if failed
+
+    0
+}
+
+pub fn sys_read(args: &SyscallArgs) -> usize {
+    // FIXME: just like sys_write
+
+    0
+}
+
+pub fn exit_process(args: &SyscallArgs, context: &mut ProcessContext) {
+    // FIXME: exit process with retcode
+}
+
+pub fn list_process() {
+    // FIXME: list all processes
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
 }
 
 pub fn sys_allocate(args: &SyscallArgs) -> usize {
@@ -41,6 +76,7 @@ pub fn sys_deallocate(args: &SyscallArgs) {
             .deallocate(core::ptr::NonNull::new_unchecked(ptr), *layout);
     }
 }
+<<<<<<< HEAD
 
 pub fn spawn_process(args: &SyscallArgs) -> usize {
     let name = unsafe {
@@ -114,3 +150,5 @@ pub fn sys_kill(args: &SyscallArgs, context: &mut ProcessContext) {
     }
     kill(pid, context);
 }
+=======
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4

@@ -1,6 +1,6 @@
 # 实验五：fork 的实现、并发与锁机制
 
-!!! tip "<br/>&nbsp;<span style="font-weight: bold; float: right">by</span>"
+!!! tip "在繁忙的十字路口指挥交通，需要一套精巧的规则，才能保证井然有序，避免冲突和事故。<br/>&nbsp;<span style="font-weight: bold; float: right">by Gemini</span>"
 
 ## 实验目的
 
@@ -20,14 +20,11 @@
 
 鼓励使用 Typst 来进行实验文档的编写，使用可以参考 [使用 Typst 编写报告](../../general/typst.md)。
 
-对于本次实验内容，你需要参考学习如下实验资料：
-
-
 ## 实验任务与要求
 
 1. 请各位同学独立完成作业，任何抄袭行为都将使本次作业判为 0 分。
 
-2. 请参考 [代码规范](../../general/coding_convention.md) 进行实验代码编写。
+2. 请参考 [代码与提交规范](../../general/specification.md) 进行实验代码编写。
 
 3. 依据 [实验任务](./tasks.md) 完成实验。
 

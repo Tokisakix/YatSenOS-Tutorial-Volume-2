@@ -1,4 +1,7 @@
+<<<<<<< HEAD
 use chrono::naive::*;
+=======
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
 use syscall_def::Syscall;
 
 #[inline(always)]
@@ -32,8 +35,16 @@ pub fn sys_read(fd: u8, buf: &mut [u8]) -> Option<usize> {
 }
 
 #[inline(always)]
+<<<<<<< HEAD
 pub fn sys_allocate(layout: &core::alloc::Layout) -> *mut u8 {
     syscall!(Syscall::Allocate, layout as *const _) as *mut u8
+=======
+pub fn sys_wait_pid(pid: u16) -> isize {
+    // FIXME: try to get the return value for process
+    //        loop & halt until the process is finished
+
+    0
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
 }
 
 #[inline(always)]
@@ -42,6 +53,7 @@ pub fn sys_list_app() {
 }
 
 #[inline(always)]
+<<<<<<< HEAD
 pub fn sys_deallocate(ptr: *mut u8, layout: &core::alloc::Layout) -> usize {
     syscall!(Syscall::Deallocate, ptr, layout as *const _)
 }
@@ -70,11 +82,26 @@ pub fn sys_time() -> NaiveDateTime {
 }
 
 #[inline(always)]
+=======
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
 pub fn sys_stat() {
     syscall!(Syscall::Stat);
 }
 
 #[inline(always)]
+<<<<<<< HEAD
+=======
+pub fn sys_allocate(layout: &core::alloc::Layout) -> *mut u8 {
+    syscall!(Syscall::Allocate, layout as *const _) as *mut u8
+}
+
+#[inline(always)]
+pub fn sys_deallocate(ptr: *mut u8, layout: &core::alloc::Layout) -> usize {
+    syscall!(Syscall::Deallocate, ptr, layout as *const _)
+}
+
+#[inline(always)]
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
 pub fn sys_spawn(path: &str) -> u16 {
     syscall!(Syscall::Spawn, path.as_ptr() as u64, path.len() as u64) as u16
 }
@@ -85,6 +112,12 @@ pub fn sys_get_pid() -> u16 {
 }
 
 #[inline(always)]
+<<<<<<< HEAD
 pub fn sys_kill(pid: u16) {
     syscall!(Syscall::Kill, pid as u64);
+=======
+pub fn sys_exit(code: isize) -> ! {
+    syscall!(Syscall::Exit, code as u64);
+    unreachable!("This process should be terminated by now.")
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
 }

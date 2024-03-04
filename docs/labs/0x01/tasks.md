@@ -33,7 +33,7 @@
 ```json
 {
   "llvm-target": "x86_64-unknown-none",
-  "data-layout": "e-m:e-i64:64-f80:128-n8:16:32:64-S128",
+  "data-layout": "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128",
   "linker-flavor": "ld.lld",
   "target-endian": "little",
   "target-pointer-width": "64",
@@ -470,6 +470,14 @@ char read_serial() {
 ```rust
 println!("{}", record.args());
 ```
+
+### Panic 处理
+
+在拥有了日志输出的能力之后可以对 panic 进行更好的处理，以便在 panic 时输出更加详细的信息。代码中已经为大家启用了 `#![feature(panic_info_message)]` 特性，并且默认给出了一个 `error!` 的输出。
+
+在 `src/utils/macros.rs` 中，你可以选择按照自己的预期修改 `panic_handler` 的实现。
+
+!!! note "`PanicInfo` 实现了 `Debug` trait，在最简的情况下，你可以使用 `{:#?}` 来输出它。"
 
 ## 思考题
 

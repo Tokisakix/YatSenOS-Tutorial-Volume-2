@@ -11,4 +11,8 @@ fn main() -> usize {
     233
 }
 
+<<<<<<< HEAD
 entry!(main);
+=======
+entry!(main);
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4

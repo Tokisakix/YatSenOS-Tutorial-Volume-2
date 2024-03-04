@@ -15,7 +15,13 @@ pub fn kernel_main(boot_info: &'static boot::BootInfo) -> ! {
 }
 
 pub fn spawn_init() -> proc::ProcessId {
+<<<<<<< HEAD
     // print_serial!("\x1b[1;1H\x1b[2J");
+=======
+    // NOTE: you may want to clear the screen before starting the shell
+    // print_serial!("\x1b[1;1H\x1b[2J");
+
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
     proc::list_app();
     proc::spawn("sh").unwrap()
 }

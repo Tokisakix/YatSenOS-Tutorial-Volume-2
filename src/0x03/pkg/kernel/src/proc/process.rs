@@ -1,15 +1,23 @@
+<<<<<<< HEAD
 use super::ProcessId;
 use super::*;
 use crate::memory::*;
 use alloc::string::String;
 use alloc::sync::Arc;
+=======
+use super::*;
+use crate::memory::*;
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
 use alloc::sync::Weak;
 use alloc::vec::Vec;
 use spin::*;
 use x86_64::structures::paging::mapper::MapToError;
 use x86_64::structures::paging::page::PageRange;
 use x86_64::structures::paging::*;
+<<<<<<< HEAD
 use x86_64::VirtAddr;
+=======
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
 
 #[derive(Clone)]
 pub struct Process {
@@ -91,6 +99,7 @@ impl Process {
     }
 
     pub fn alloc_init_stack(&self) -> VirtAddr {
+<<<<<<< HEAD
         // stack top set by pid
         let offset = (self.pid.0 - 1) as u64 * STACK_MAX_SIZE;
         let stack_top = STACK_INIT_TOP - offset;
@@ -106,6 +115,11 @@ impl Process {
         self.write().set_stack(stack_bottom_addr, STACK_DEF_PAGE);
 
         stack_top_addr
+=======
+        // FIXME: alloc init stack base on self pid
+
+        VirtAddr::new(0)
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
     }
 }
 
@@ -135,7 +149,11 @@ impl ProcessInner {
     }
 
     pub fn clone_page_table(&self) -> PageTableContext {
+<<<<<<< HEAD
         self.page_table.as_ref().unwrap().clone()
+=======
+        self.page_table.as_ref().unwrap().clone_l4()
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
     }
 
     pub fn is_ready(&self) -> bool {
@@ -145,6 +163,7 @@ impl ProcessInner {
     /// Save the process's context
     /// mark the process as ready
     pub(super) fn save(&mut self, context: &ProcessContext) {
+<<<<<<< HEAD
         self.context.save(context);
 
         // dead process should not be ready
@@ -152,11 +171,15 @@ impl ProcessInner {
         if self.status == ProgramStatus::Running {
             self.status = ProgramStatus::Ready;
         }
+=======
+        // FIXME: save the process's context
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
     }
 
     /// Restore the process's context
     /// mark the process as running
     pub(super) fn restore(&mut self, context: &mut ProcessContext) {
+<<<<<<< HEAD
         self.context.restore(context);
         self.page_table.as_ref().unwrap().load();
         self.status = ProgramStatus::Running;
@@ -164,12 +187,18 @@ impl ProcessInner {
 
     pub fn init_stack_frame(&mut self, entry: VirtAddr, stack_top: VirtAddr) {
         self.context.init_stack_frame(entry, stack_top);
+=======
+        // FIXME: restore the process's context
+
+        // FIXME: restore the process's page table
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
     }
 
     pub fn parent(&self) -> Option<Arc<Process>> {
         self.parent.as_ref().and_then(|p| p.upgrade())
     }
 
+<<<<<<< HEAD
     pub fn try_alloc_new_stack_page(&mut self, addr: VirtAddr) -> Result<(), MapToError<Size4KiB>> {
         let alloc = &mut *get_frame_alloc_for_sure();
         let new_start_page = Page::<Size4KiB>::containing_address(addr);
@@ -204,6 +233,14 @@ impl ProcessInner {
         self.exit_code = Some(ret);
         self.proc_data.take();
         self.page_table.take();
+=======
+    pub fn kill(&mut self, ret: isize) {
+        // FIXME: set exit code
+
+        // FIXME: set status to dead
+
+        // FIXME: take and drop unused resources
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
     }
 }
 
@@ -261,8 +298,13 @@ impl core::fmt::Display for Process {
         write!(
             f,
             " #{:-3} | #{:-3} | {:12} | {:7} | {:?}",
+<<<<<<< HEAD
             u16::from(self.pid),
             inner.parent().map(|p| u16::from(p.pid)).unwrap_or(0),
+=======
+            self.pid.0,
+            inner.parent().map(|p| p.pid.0).unwrap_or(0),
+>>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
             inner.name,
             inner.ticks_passed,
             inner.status

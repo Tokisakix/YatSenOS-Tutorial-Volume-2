@@ -1,15 +1,11 @@
-use super::ProcessId;
 use super::*;
 use crate::memory::*;
-use alloc::string::String;
-use alloc::sync::Arc;
 use alloc::sync::Weak;
 use alloc::vec::Vec;
 use spin::*;
 use x86_64::structures::paging::mapper::MapToError;
 use x86_64::structures::paging::page::PageRange;
 use x86_64::structures::paging::*;
-use x86_64::VirtAddr;
 
 #[derive(Clone)]
 pub struct Process {
@@ -123,7 +119,7 @@ impl ProcessInner {
     }
 
     pub fn clone_page_table(&self) -> PageTableContext {
-        self.page_table.as_ref().unwrap().clone()
+        self.page_table.as_ref().unwrap().clone_l4()
     }
 
     pub fn is_ready(&self) -> bool {
@@ -140,7 +136,7 @@ impl ProcessInner {
     /// mark the process as running
     pub(super) fn restore(&mut self, context: &mut ProcessContext) {
         // FIXME: restore the process's context
-        
+
         // FIXME: restore the process's page table
     }
 

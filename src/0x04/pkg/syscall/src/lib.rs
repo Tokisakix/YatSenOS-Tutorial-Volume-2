@@ -1,11 +1,11 @@
 #![no_std]
 
-use num_enum::TryFromPrimitive;
+use num_enum::FromPrimitive;
 
 pub mod macros;
 
-#[repr(u16)]
-#[derive(Clone, Debug, TryFromPrimitive)]
+#[repr(usize)]
+#[derive(Clone, Debug, FromPrimitive)]
 pub enum Syscall {
     Read = 0,
     Write = 1,
@@ -20,5 +20,5 @@ pub enum Syscall {
     Deallocate = 65534,
 
     #[num_enum(default)]
-    None = 65535,
+    Unknown = 65535,
 }

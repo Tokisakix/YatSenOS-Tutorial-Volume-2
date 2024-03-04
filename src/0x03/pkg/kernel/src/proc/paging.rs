@@ -32,7 +32,7 @@ impl PageTableContext {
     }
 
     /// Create a new page table object based on current page table.
-    pub fn clone(&self) -> Self {
+    pub fn clone_l4(&self) -> Self {
         // 1. alloc new page table
         let mut frame_alloc = crate::memory::get_frame_alloc_for_sure();
         let page_table_addr = frame_alloc
@@ -75,7 +75,6 @@ impl PageTableContext {
 impl core::fmt::Debug for PageTableContext {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("PageTable")
-            .field("ref", &self.using_count())
             .field("addr", &self.reg.addr)
             .field("flags", &self.reg.flags)
             .finish()

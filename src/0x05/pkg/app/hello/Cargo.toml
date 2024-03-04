@@ -2,12 +2,6 @@
 name = "ysos_hello"
 version = "0.1.0"
 edition = "2021"
-<<<<<<< HEAD
-authors = ["GZTime <Time.GZ@outlook.com>"]
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-=======
->>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
 
 [dependencies]
 lib = { path="../../lib", package="yslib"}

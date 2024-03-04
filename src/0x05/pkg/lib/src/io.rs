@@ -11,7 +11,6 @@ impl Stdin {
         Self
     }
 
-<<<<<<< HEAD
     pub fn read_char(&self) -> Option<char> {
         let mut buf = vec![0; 4];
         if let Some(bytes) = sys_read(0, &mut buf) {
@@ -66,16 +65,6 @@ impl Stdin {
             }
         }
         string
-=======
-    pub fn read_line(&self) -> String {
-        // FIXME: allocate string
-        // FIXME: read from input buffer
-        //       - maybe char by char?
-        // FIXME: handle backspace / enter...
-        // FIXME: return string
-
-        String::new()
->>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
     }
 }
 

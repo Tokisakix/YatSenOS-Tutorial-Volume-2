@@ -2,10 +2,6 @@
 name = "ysos_syscall"
 version = "0.4.0"
 edition = "2021"
-<<<<<<< HEAD
-authors = ["GZTime <Time.GZ@outlook.com>"]
-=======
->>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
 
 [dependencies]
 num_enum = { version = "0.7", default-features = false }

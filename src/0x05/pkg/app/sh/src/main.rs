@@ -62,7 +62,7 @@ Usage:
 };
 
 
-fn main() -> usize {
+fn main() -> isize {
     println!("---------------------- Shell ------------------------");
     println!("                                 type `help` for help");
     loop {

@@ -114,3 +114,7 @@ pub fn sys_kill(args: &SyscallArgs, context: &mut ProcessContext) {
     }
     kill(pid, context);
 }
+
+pub fn sys_fork(context: &mut ProcessContext) {
+    fork(context)
+}

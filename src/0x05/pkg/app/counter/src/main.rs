@@ -10,6 +10,7 @@ static mut COUNTER: isize = 0;
 
 fn main() -> isize {
     let mut pids = [0u16; THREAD_COUNT];
+    println!("in counter.");
 
     for i in 0..THREAD_COUNT {
         let pid = sys_fork();

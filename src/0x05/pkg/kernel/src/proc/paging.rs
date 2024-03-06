@@ -71,6 +71,12 @@ impl PageTableContext {
             )
         }
     }
+
+    pub fn fork(&self) -> Self {
+        Self {
+            reg: self.reg.clone(),
+        }
+    }
 }
 
 impl core::fmt::Debug for PageTableContext {

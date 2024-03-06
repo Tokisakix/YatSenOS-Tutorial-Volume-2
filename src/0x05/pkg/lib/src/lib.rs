@@ -21,6 +21,7 @@ use core::fmt::*;
 pub use alloc::*;
 pub use io::*;
 pub use syscall::*;
+pub mod sync;
 
 #[macro_export]
 macro_rules! print {

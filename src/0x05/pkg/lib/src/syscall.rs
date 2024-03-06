@@ -47,7 +47,7 @@ pub fn sys_deallocate(ptr: *mut u8, layout: &core::alloc::Layout) -> usize {
 }
 
 #[inline(always)]
-pub fn sys_exit(code: usize) -> ! {
+pub fn sys_exit(code: isize) -> ! {
     syscall!(Syscall::Exit, code);
     unreachable!();
 }
@@ -87,4 +87,10 @@ pub fn sys_get_pid() -> u16 {
 #[inline(always)]
 pub fn sys_kill(pid: u16) {
     syscall!(Syscall::Kill, pid as u64);
+}
+
+#[inline(always)]
+pub fn sys_fork() -> u16 {
+    let pid = syscall!(Syscall::Fork);
+    pid as u16
 }

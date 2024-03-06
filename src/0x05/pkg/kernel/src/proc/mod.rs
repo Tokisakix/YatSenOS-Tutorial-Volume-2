@@ -5,6 +5,7 @@ mod paging;
 mod pid;
 mod process;
 mod processor;
+mod sync;
 
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -204,4 +205,18 @@ pub fn list_app() {
 
         println!(">>> App list: {}", apps);
     });
+}
+
+pub fn fork(context: &mut ProcessContext) {
+    x86_64::instructions::interrupts::without_interrupts(|| {
+        let manager = get_process_manager();
+        // save_current as parent
+        let parent = manager.save_current(context);
+        // fork to get child
+        manager.fork();
+        // push to child & parent to ready queue
+        manager.push_ready(parent);
+        // switch to next process
+        manager.switch_next(context);
+    })
 }

@@ -282,4 +282,16 @@ impl ProcessManager {
 
         print!("{}", output);
     }
+
+    pub fn fork(&self) {
+        // get current process
+        let proc = self.current().fork();
+        // fork to get child
+        let pid = proc.pid();
+        // add child to process list
+        self.add_proc(pid, proc);
+        self.push_ready(pid);
+    }
+
+    
 }

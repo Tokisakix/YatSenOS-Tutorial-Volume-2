@@ -1,3 +1,5 @@
+use core::ptr::copy_nonoverlapping;
+
 use super::ProcessId;
 use super::*;
 use crate::memory::{self, *};
@@ -89,6 +91,34 @@ impl Process {
         );
 
         inner.kill(self.pid, ret);
+    }
+
+    pub fn fork(self: &Arc<Self>) -> Arc<Self> {
+        // lock inner as write
+        let mut inner = self.write();
+
+        // inner fork with parent weak ref
+        let child_inner = inner.fork(Arc::downgrade(self));
+        let child_pid = ProcessId::new();
+
+        // FOR DBG: maybe print the child process info
+        //          e.g. parent, name, pid, etc.
+
+        // make the arc of child
+        let child = Arc::new(Self {
+            pid: child_pid,
+            inner: Arc::new(RwLock::new(child_inner)),
+        });
+
+        inner.context.set_rax(child.pid.0 as usize);
+
+        // add child to current process's children list
+        inner.children.push(child.clone());
+
+        // mark the child as ready & return itlet mut inner = self.write();
+        inner.pause();
+
+        child
     }
 }
 
@@ -261,6 +291,80 @@ impl ProcessInner {
         }
 
         drop(page_table);
+    }
+
+    fn clone_range(&self, cur_addr: u64, dest_addr: u64, size: usize) {
+        trace!("Clone range: {:#x} -> {:#x}", cur_addr, dest_addr);
+        unsafe {
+            copy_nonoverlapping::<u8>(
+                cur_addr as *mut u8,
+                dest_addr as *mut u8,
+                size * Size4KiB::SIZE as usize,
+            );
+        }
+    }
+
+    pub fn fork(&mut self, parent: Weak<Process>) -> ProcessInner {
+        // get current process's stack info
+        let stack_info = self.stack_segment.unwrap();
+        let cur_stack_base = stack_info.start.start_address().as_u64();
+        let mut new_stack_base = stack_info.start.start_address().as_u64() - (self.children.len() as u64 + 1) * STACK_MAX_SIZE;
+        let frame_alloc = &mut *get_frame_alloc_for_sure();
+        let mapper = &mut self.page_table.as_ref().unwrap().mapper();
+
+        // alloc & map new stack for child (see instructions)
+        while elf::map_range(
+            new_stack_base,
+            stack_info.count() as u64,
+            mapper,
+            frame_alloc,
+            true,
+        )
+        .is_err()
+        {
+            trace!("Map thread stack to {:#x} failed.", new_stack_base);
+            new_stack_base -= STACK_MAX_SIZE;
+        }
+
+        // clone the process data struct
+        let mut child_context = self.context;
+        let mut child_proc_data = self.proc_data.clone().unwrap();
+
+        // clone the page table context (see instructions)
+        let stack = Page::range(
+            Page::containing_address(VirtAddr::new_truncate(new_stack_base)),
+            Page::containing_address(VirtAddr::new_truncate(
+                new_stack_base + stack_info.count() as u64 * Size4KiB::SIZE,
+            )),
+        );
+        
+        // set the return value 0 for child with `context.set_rax`
+        child_context.set_rax(0);
+
+        // copy the *entire stack* from parent to child
+        child_context.set_stack_offset(new_stack_base - cur_stack_base);
+        self.clone_range(cur_stack_base, new_stack_base, stack_info.count());
+        let child_page_table = self.page_table.as_ref().unwrap().fork();
+
+        // update child's stack frame with new *stack pointer*
+        //          > keep lower bits of rsp, update the higher bits
+        //          > also update the stack record in process data
+        child_proc_data.stack_memory_usage = stack.count();
+        child_proc_data.code_memory_usage = 0;
+        child_proc_data.stack_segment = Some(stack);
+
+        // construct the child process inner
+        Self {
+            name: self.name.clone(),
+            exit_code: None,
+            parent: Some(parent),
+            status: ProgramStatus::Ready,
+            ticks_passed: 0,
+            context: child_context,
+            page_table: Some(child_page_table),
+            children: Vec::new(),
+            proc_data: Some(child_proc_data),
+        }
     }
 }
 

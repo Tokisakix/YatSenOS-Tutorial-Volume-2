@@ -7,10 +7,10 @@ extern crate lib;
 
 const THREAD_COUNT: usize = 8;
 static mut COUNTER: isize = 0;
+static mut mutex: SpinLock = SpinLock::new();
 
 fn main() -> isize {
     let mut pids = [0u16; THREAD_COUNT];
-    println!("in counter.");
 
     for i in 0..THREAD_COUNT {
         let pid = sys_fork();
@@ -38,8 +38,10 @@ fn main() -> isize {
 
 fn do_counter_inc() {
     for _ in 0..100 {
-        // FIXME: protect the critical section
+        // protect the critical section
+        unsafe { mutex.acquire() };
         inc_counter();
+        unsafe { mutex.release() };
     }
 }
 

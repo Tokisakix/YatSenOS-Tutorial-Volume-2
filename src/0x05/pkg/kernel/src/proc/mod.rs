@@ -24,6 +24,8 @@ use x86_64::VirtAddr;
 
 use crate::Resource;
 
+use self::sync::SemaphoreResult;
+
 // 0xffff_ff00_0000_0000 is the kernel's address space
 pub const STACK_MAX: u64 = 0x0000_4000_0000_0000;
 // stack max addr, every thread has a stack space
@@ -218,5 +220,58 @@ pub fn fork(context: &mut ProcessContext) {
         manager.push_ready(parent);
         // switch to next process
         manager.switch_next(context);
+    })
+}
+
+pub fn new_sem(key: u32, value: usize) -> usize {
+    x86_64::instructions::interrupts::without_interrupts(|| {
+        if get_process_manager().current().write().new_sem(key, value) {
+            0
+        } else {
+            1
+        }
+    })
+}
+
+pub fn remove_sem(key: u32) -> usize {
+    x86_64::instructions::interrupts::without_interrupts(|| {
+        if get_process_manager().current().write().remove_sem(key) {
+            0
+        } else {
+            1
+        }
+    })
+}
+
+pub fn sem_siganl(key: u32, context: &mut ProcessContext) {
+    x86_64::instructions::interrupts::without_interrupts(|| {
+        let manager = get_process_manager();
+        let ret = manager.current().write().sem_signal(key);
+        match ret {
+            SemaphoreResult::Ok => context.set_rax(0),
+            SemaphoreResult::NotExist => context.set_rax(1),
+            SemaphoreResult::WakeUp(pid) => manager.wake_up(pid),
+            _ => unreachable!(),
+        }
+    })
+}
+
+pub fn sem_wait(key: u32, context: &mut ProcessContext) {
+    x86_64::instructions::interrupts::without_interrupts(|| {
+        let manager = get_process_manager();
+        let pid = processor::current_pid();
+        let ret = manager.current().write().sem_wait(key, pid);
+        match ret {
+            SemaphoreResult::Ok => context.set_rax(0),
+            SemaphoreResult::NotExist => context.set_rax(1),
+            SemaphoreResult::Block(pid) => {
+                // save, block it, then switch to next
+                //        maybe use `save_current` and `switch_next`
+                manager.save_current(context);
+                manager.block(pid);
+                manager.switch_next(context);
+            }
+            _ => unreachable!(),
+        }
     })
 }

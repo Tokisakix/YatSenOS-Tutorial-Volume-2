@@ -10,6 +10,8 @@ use x86_64::{
 
 use crate::{resource::StdIO, Resource};
 
+use self::sync::SemaphoreSet;
+
 use super::*;
 
 #[derive(Debug, Clone)]
@@ -17,6 +19,7 @@ pub struct ProcessData {
     // shared data
     pub(super) env: Arc<RwLock<BTreeMap<String, String>>>,
     pub(super) file_handles: Arc<RwLock<BTreeMap<u8, Resource>>>,
+    pub(super) semaphores: Arc<RwLock<SemaphoreSet>>,
 
     // process specific data
     pub(super) code_segments: Option<Vec<PageRangeInclusive>>,
@@ -36,6 +39,7 @@ impl Default for ProcessData {
 
         Self {
             env: Arc::new(RwLock::new(BTreeMap::new())),
+            semaphores: Arc::new(RwLock::new(SemaphoreSet::default())),
             code_segments: None,
             stack_segment: None,
             file_handles: Arc::new(RwLock::new(file_handles)),
@@ -94,5 +98,25 @@ impl ProcessData {
         } else {
             false
         }
+    }
+
+    #[inline]
+    pub fn new_sem(&mut self, key: u32, value: usize) -> bool {
+        self.semaphores.write().insert(key, value)
+    }
+
+    #[inline]
+    pub fn remove_sem(&mut self, key: u32) -> bool {
+        self.semaphores.write().remove(key)
+    }
+
+    #[inline]
+    pub fn sem_signal(&mut self, key: u32) -> SemaphoreResult {
+        self.semaphores.read().signal(key)
+    }
+
+    #[inline]
+    pub fn sem_wait(&mut self, key: u32, pid: ProcessId) -> SemaphoreResult {
+        self.semaphores.read().wait(key, pid)
     }
 }

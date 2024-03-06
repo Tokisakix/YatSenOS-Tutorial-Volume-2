@@ -74,6 +74,19 @@ impl ProcessManager {
             .unwrap_or(-1)
     }
 
+    pub fn wake_up(&self, pid: ProcessId) {
+        if let Some(proc) = self.get_proc(&pid) {
+            proc.write().pause();
+            self.push_ready(pid);
+        }
+    }
+
+    pub fn block(&self, pid: ProcessId) {
+        if let Some(proc) = self.get_proc(&pid) {
+            proc.write().block();
+        }
+    }
+
     pub fn save_current(&self, context: &ProcessContext) -> ProcessId {
         let current = self.current();
         let pid = current.pid();

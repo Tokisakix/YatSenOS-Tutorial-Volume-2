@@ -366,6 +366,10 @@ impl ProcessInner {
             proc_data: Some(child_proc_data),
         }
     }
+
+    pub fn block(&mut self) {
+        self.status = ProgramStatus::Blocked;
+    }
 }
 
 impl core::ops::Deref for Process {

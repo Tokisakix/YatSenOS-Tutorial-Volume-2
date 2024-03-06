@@ -94,3 +94,23 @@ pub fn sys_fork() -> u16 {
     let pid = syscall!(Syscall::Fork);
     pid as u16
 }
+
+#[inline(always)]
+pub fn sys_new_sem(key: u32, value: usize) -> bool {
+    syscall!(Syscall::Sem, 0, key as usize, value) == 0
+}
+
+#[inline(always)]
+pub fn sys_rm_sem(key: u32) -> bool {
+    syscall!(Syscall::Sem, 1, key as usize) == 0
+}
+
+#[inline(always)]
+pub fn sys_sem_signal(key: u32) {
+    _ = syscall!(Syscall::Sem, 2, key as usize)
+}
+
+#[inline(always)]
+pub fn sys_sem_wait(key: u32) {
+    _ = syscall!(Syscall::Sem, 3, key as usize)
+}

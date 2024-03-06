@@ -58,6 +58,7 @@ pub fn dispatcher(context: &mut ProcessContext) {
         // pid: arg0 as u16
         Syscall::Kill => sys_kill(&args, context),
 
+        Syscall::Sem => sys_sem(&args, context),
         // None -> time: usize
         Syscall::Time => context.set_rax(sys_clock() as usize),
         // None

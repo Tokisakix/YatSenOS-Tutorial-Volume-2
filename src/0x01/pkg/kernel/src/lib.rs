@@ -11,6 +11,8 @@ extern crate libm;
 
 #[macro_use]
 pub mod utils;
+use core::arch::x86_64;
+
 pub use utils::*;
 
 mod drivers;

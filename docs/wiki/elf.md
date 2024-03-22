@@ -70,7 +70,11 @@ typedef __s64	Elf64_Sxword;
   #include <stdio.h>
   #include <stdint.h>
   #include <stdlib.h>
-
+  #include <assert.h>
+  #include <fcntl.h>
+  #include <unistd.h>
+  #include <elf.h>
+  
   #define	EI_MAG0		0		/* e_ident[] indexes */
   #define	EI_MAG1		1
   #define	EI_MAG2		2
@@ -94,7 +98,7 @@ typedef __s64	Elf64_Sxword;
     read(fd, &ident, 0x10);
 
     // the first 4 bytes
-    uint32_t magic = *(uint32_t *)ident;
+    uint8_t *magic = (uint8_t *)ident;
 
     // identify the ELF file
     assert(
@@ -271,7 +275,7 @@ typedef struct elf64_phdr {
      08     .init_array .fini_array .data.rel.ro .dynamic .got
   ```
 
-## 在编译链接的过程中控制 ELF 的结构
+## 控制 ELF 的结构
 
 以下的程序会把 `a` 和 `function()` 放入对应的 section 中：
 
@@ -298,7 +302,7 @@ SECTIONS
 使用以下命令编译
 
 ```bash
-gcc main.c -c main.o && ld main.o -T ./script.ld -o main
+gcc main.c -c -o main.o && ld main.o -T ./script.ld -o main
 ```
 
 观察结果，你也可以使用 `readelf`，这里使用 `gdb`插件 `gef`的`vmmap`命令来观察，也可以直接观察 `/proc/pid/`

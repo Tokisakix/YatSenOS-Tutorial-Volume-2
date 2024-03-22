@@ -56,6 +56,8 @@ lazy_static! {
 
 你需要参考上下文，在 `src/memory/gdt.rs` 中补全 TSS 的中断栈表，为 Double Fault 和 Page Fault 准备独立的栈。
 
+!!! warning "仅修改 `interrupt_stack_table`，不要修改用作示例的 `privilege_stack_table`"
+
 ## 注册中断处理程序
 
 !!! note "请阅读 [CPU 中断处理](../../wiki/interrupts.md) 部分，学习中断基本知识。"
@@ -452,7 +454,7 @@ impl XApic {
 use super::consts::*;
 
 pub unsafe fn register_idt(idt: &mut InterruptDescriptorTable) {
-    idt[Interrupts::IrqBase as usize + Irq::Timer as usize]
+    idt[Interrupts::IrqBase as u8 + Irq::Timer as u8]
         .set_handler_fn(clock_handler);
 }
 
@@ -551,7 +553,7 @@ static int init_serial() {
     }
 
     #[inline]
-    pub fn try_get_key() -> Option<Key> {
+    pub fn try_pop_key() -> Option<Key> {
         INPUT_BUF.pop()
     }
     ```
@@ -576,7 +578,7 @@ static int init_serial() {
 use super::consts::*;
 
 pub unsafe fn register_idt(idt: &mut InterruptDescriptorTable) {
-    idt[Interrupts::IrqBase as usize + Irq::Serial0 as usize]
+    idt[Interrupts::IrqBase as u8 + Irq::Serial0 as u8]
         .set_handler_fn(serial_handler);
 }
 

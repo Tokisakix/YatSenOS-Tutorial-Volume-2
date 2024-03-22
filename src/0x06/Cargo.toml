@@ -5,6 +5,7 @@ members = [
     "pkg/boot",
     "pkg/kernel",
     "pkg/syscall",
+    "pkg/storage",
     "pkg/lib",
     "pkg/app/*"
 ]

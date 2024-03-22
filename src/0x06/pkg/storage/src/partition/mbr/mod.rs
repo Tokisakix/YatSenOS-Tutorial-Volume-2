@@ -38,8 +38,12 @@ where
 
         for i in 0..4 {
             partitions.push(
-                // FIXME: parse the mbr partition from the buffer
+                // parse the mbr partition from the buffer
                 //      - just ignore other fields for mbr
+                {
+                    let data = buffer[0x1be + (i * 16)..0x1be + (i * 16) + 16].try_into().unwrap();
+                    MbrPartition::parse(data)
+                }
             );
 
             if partitions[i].is_active() {

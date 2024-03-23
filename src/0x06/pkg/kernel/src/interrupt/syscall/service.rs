@@ -96,6 +96,16 @@ pub fn exit_process(args: &SyscallArgs, context: &mut ProcessContext) {
     process_exit(args.arg0 as isize, context);
 }
 
+pub fn list_dir(args: &SyscallArgs) {
+    let root = unsafe {
+        core::str::from_utf8_unchecked(core::slice::from_raw_parts(
+            args.arg0 as *const u8,
+            args.arg1,
+        ))
+    };
+    crate::filesystem::ls(root);
+}
+
 pub fn list_process() {
     print_process_list();
 }

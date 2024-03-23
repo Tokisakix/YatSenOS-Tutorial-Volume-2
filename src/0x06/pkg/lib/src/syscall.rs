@@ -1,4 +1,4 @@
-use chrono::naive::*;
+use chrono::{DateTime, NaiveDateTime, Utc};
 use syscall_def::Syscall;
 
 #[inline(always)]
@@ -67,6 +67,25 @@ pub fn sys_time() -> NaiveDateTime {
     let time = syscall!(Syscall::Time) as i64;
     const BILLION: i64 = 1_000_000_000;
     NaiveDateTime::from_timestamp_opt(time / BILLION, (time % BILLION) as u32).unwrap_or_default()
+}
+
+#[inline(always)]
+pub fn sys_list_dir(root: &str) {
+    syscall!(Syscall::ListDir, root.as_ptr() as u64, root.len() as u64);
+}
+
+#[inline(always)]
+pub fn sys_open(path: &str) -> u8 {
+    syscall!(
+        Syscall::Open,
+        path.as_ptr() as u64,
+        path.len() as u64
+    ) as u8
+}
+
+#[inline(always)]
+pub fn sys_close(fd: u8) -> bool {
+    syscall!(Syscall::Close, fd as u64) != 0
 }
 
 #[inline(always)]

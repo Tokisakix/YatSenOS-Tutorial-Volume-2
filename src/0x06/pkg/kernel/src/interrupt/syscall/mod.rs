@@ -44,7 +44,10 @@ pub fn dispatcher(context: &mut ProcessContext) {
         Syscall::Read => context.set_rax(sys_read(&args)),
         // fd: arg0 as u8, buf: &[u8] (arg1 as *const u8, arg2 as len)
         Syscall::Write => context.set_rax(sys_write(&args)),
-
+        // path: &str (arg0 as *const u8, arg1 as len), mode: arg2 as u8 -> fd: u8
+        Syscall::Open => {},
+        // fd: arg0 as u8 -> success: bool
+        Syscall::Close => {},
         // None -> pid: u16
         Syscall::GetPid => context.set_rax(sys_get_pid() as usize),
 
@@ -61,6 +64,8 @@ pub fn dispatcher(context: &mut ProcessContext) {
         Syscall::Sem => sys_sem(&args, context),
         // None -> time: usize
         Syscall::Time => context.set_rax(sys_clock() as usize),
+        // None
+        Syscall::ListDir => list_dir(&args),
         // None
         Syscall::Stat => list_process(),
         // None

@@ -3,8 +3,11 @@
 
 extern crate alloc;
 
+use core::clone;
+
 use alloc::string::ToString;
 use alloc::vec::Vec;
+use lib::string::String;
 use lib::*;
 
 extern crate lib;
@@ -48,6 +51,11 @@ pub fn sh_kill(line : Vec<&str>) {
     sys_kill(pid.unwrap());
 }
 
+pub fn sh_cd(line : Vec<&str>, path : &mut String) {
+    *path = String::from(line[1]);
+    return;
+}
+
 const HELP_INFO: &'static str = {
 r#"Shell by Tokisakix
 Usage:
@@ -63,13 +71,16 @@ Usage:
 
 
 fn main() -> isize {
+    let mut path = String::from("/");
     println!("---------------------- Shell ------------------------");
     println!("                                 type `help` for help");
     loop {
-        print!("> ");
+        print!("{} > ", path);
         let input = stdin().read_line();
         let line: Vec<&str> = input.trim().split(' ').collect();
         match line[0] {
+            "ls" => sys_list_dir(path.as_str()),
+            "cd" => sh_cd(line, &mut path),
             "exit" => break,
             "ps" => sys_stat(),
             "lsapp" => sys_list_app(),

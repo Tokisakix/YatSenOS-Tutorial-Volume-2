@@ -3,7 +3,7 @@ use super::*;
 impl Fat16Impl {
     pub fn new(inner: impl BlockDevice<Block512>) -> Self {
         let mut block = Block::default();
-        let block_size = Block512::size();
+        let _block_size = Block512::size();
 
         inner.read_block(0, &mut block).unwrap();
         let bpb = Fat16Bpb::new(block.as_ref()).unwrap();
@@ -11,9 +11,9 @@ impl Fat16Impl {
         trace!("Loading Fat16 Volume: {:#?}", bpb);
 
         // HINT: FirstDataSector = BPB_ResvdSecCnt + (BPB_NumFATs * FATSz) + RootDirSectors;
+        let root_dir_size = ((bpb.root_entries_count() as usize * DirEntry::LEN) + BLOCK_SIZE - 1) / BLOCK_SIZE;
         let fat_start = bpb.reserved_sector_count() as usize;
-        let root_dir_size = { /* FIXME: get the size of root dir from bpb */ };
-        let first_root_dir_sector = { /* FIXME: calculate the first root dir sector */ };
+        let first_root_dir_sector = fat_start + (bpb.fat_count() as usize * bpb.sectors_per_fat() as usize);
         let first_data_sector = first_root_dir_sector + root_dir_size;
 
         Self {
@@ -24,18 +24,177 @@ impl Fat16Impl {
             first_root_dir_sector,
         }
     }
+    
 
-    pub fn cluster_to_sector(&self, cluster: &Cluster) -> usize {
+    pub fn get_directory_iter<F>(&self, dir: &Directory, mut func: F) -> Result<()>
+    where
+        F: FnMut(&DirEntry),
+    {
+        if let Some(entry) = &dir.entry {
+            trace!("Iterating directory: {}", entry.filename());
+        }
+
+        let mut current_cluster = Some(dir.cluster);
+        let mut dir_sector_num = self.cluster2sector(&dir.cluster);
+        let dir_size = match dir.cluster {
+            Cluster::ROOT_DIR => self.first_data_sector - self.first_root_dir_sector,
+            _ => self.bpb.sectors_per_cluster() as usize,
+        };
+        trace!("Directory size: {}", dir_size);
+
+        let mut block = Block::default();
+        while let Some(cluster) = current_cluster {
+            for sector in dir_sector_num..dir_sector_num + dir_size {
+                self.inner.read_block(sector, &mut block).unwrap();
+                for entry in 0..BLOCK_SIZE / DirEntry::LEN {
+                    let start = entry * DirEntry::LEN;
+                    let end = (entry + 1) * DirEntry::LEN;
+
+                    let dir_entry =
+                        DirEntry::parse(&block[start..end])?;
+
+                    if dir_entry.is_eod() {
+                        return Ok(());
+                    } else if dir_entry.is_valid() && !dir_entry.is_long_name() {
+                        func(&dir_entry);
+                    }
+                }
+            }
+            current_cluster = if cluster != Cluster::ROOT_DIR {
+                match self.get_next_cluster(cluster) {
+                    Ok(n) => {
+                        dir_sector_num = self.cluster2sector(&n);
+                        Some(n)
+                    }
+                    _ => None,
+                }
+            } else {
+                None
+            }
+        }
+        Ok(())
+    }
+
+    /// Get an entry from the given directory
+    pub fn get_directory_entry(
+        &self,
+        dir: &Directory,
+        name: &str,
+    ) -> Result<DirEntry> {
+        let match_name = ShortFileName::parse(name)?;
+
+        let mut current_cluster = Some(dir.cluster);
+        let mut dir_sector_num = self.cluster2sector(&dir.cluster);
+        let dir_size = match dir.cluster {
+            Cluster::ROOT_DIR => self.first_data_sector - self.first_root_dir_sector,
+            _ => self.bpb.sectors_per_cluster() as usize,
+        };
+        while let Some(cluster) = current_cluster {
+            for sector in dir_sector_num..dir_sector_num + dir_size {
+                match self.get_sector_entry(&match_name, sector) {
+                    Err(FsError::NotInSector) => continue,
+                    x => return x,
+                }
+            }
+            current_cluster = if cluster != Cluster::ROOT_DIR {
+                match self.get_next_cluster(cluster) {
+                    Ok(n) => {
+                        dir_sector_num = self.cluster2sector(&n);
+                        Some(n)
+                    }
+                    _ => None,
+                }
+            } else {
+                None
+            }
+        }
+        Err(FsError::FileNotFound)
+    }
+
+    pub fn cluster2sector(&self, cluster: &Cluster) -> usize {
         match *cluster {
             Cluster::ROOT_DIR => self.first_root_dir_sector,
             Cluster(c) => {
-                // FIXME: calculate the first sector of the cluster
-                // HINT: FirstSectorofCluster = ((N – 2) * BPB_SecPerClus) + FirstDataSector;
+                // FirstSectorofCluster = ((N – 2) * BPB_SecPerClus) + FirstDataSector;
+                let first_sector_of_cluster = (c - 2) * self.bpb.sectors_per_cluster() as u32;
+                self.first_data_sector + first_sector_of_cluster as usize
             }
         }
     }
 
-    // FIXME: YOU NEED TO IMPLEMENT THE FILE SYSTEM OPERATIONS HERE
+    /// look for next cluster in FAT
+    pub fn get_next_cluster(&self, cluster: Cluster) -> Result<Cluster> {
+        let fat_offset = (cluster.0 * 2) as usize;
+        let cur_fat_sector = self.fat_start + fat_offset / BLOCK_SIZE;
+        let offset = fat_offset % BLOCK_SIZE;
+
+        let mut block = Block::default();
+        self.inner.read_block(cur_fat_sector, &mut block).unwrap();
+
+        let fat_entry = u16::from_le_bytes(block[offset..=offset + 1].try_into().unwrap_or([0; 2]));
+        match fat_entry {
+            0xFFF7 => Err(FsError::BadCluster),         // Bad cluster
+            0xFFF8..=0xFFFF => Err(FsError::EndOfFile), // There is no next cluster
+            f => Ok(Cluster(f as u32)),                     // Seems legit
+        }
+    }
+
+    /// Finds an entry in a given sector
+    fn get_sector_entry(
+        &self,
+        match_name: &ShortFileName,
+        sector: usize,
+    ) -> Result<DirEntry> {
+        let mut block = Block::default();
+        self.inner.read_block(sector, &mut block).unwrap();
+
+        for entry in 0..BLOCK_SIZE / DirEntry::LEN {
+            let start = entry * DirEntry::LEN;
+            let end = (entry + 1) * DirEntry::LEN;
+            let dir_entry =
+                DirEntry::parse(&block[start..end]).map_err(|_| FsError::InvalidOperation)?;
+            // trace!("Matching {} to {}...", dir_entry.filename(), match_name);
+            if dir_entry.is_eod() {
+                // Can quit early
+                return Err(FsError::FileNotFound);
+            } else if dir_entry.filename.matches(match_name) {
+                // Found it
+                return Ok(dir_entry);
+            };
+        }
+        Err(FsError::NotInSector)
+    }
+
+    fn get_parent_dir(&self, path: &str) -> Result<Directory> {
+        let mut path = path.split(PATH_SEPARATOR);
+        let mut current = Directory::root();
+
+        while let Some(dir) = path.next() {
+            if dir.is_empty() {
+                continue;
+            }
+
+            let entry = self.get_directory_entry(&current, dir)?;
+
+            if entry.is_directory() {
+                current = Directory::from_entry(entry);
+            } else if path.next().is_some() {
+                return Err(FsError::NotADirectory);
+            } else {
+                break;
+            }
+        }
+
+        Ok(current)
+    }
+
+    fn get_dir_entry(&self, path: &str) -> Result<DirEntry> {
+        let parent = self.get_parent_dir(path)?;
+        let name = path.rsplit(PATH_SEPARATOR).next().unwrap_or("");
+
+        self.get_directory_entry(&parent, name)
+    }
+    // YOU NEED TO IMPLEMENT THE FILE SYSTEM OPERATIONS HERE
     //      - calculate the sectors and the clusters
     //      - read the FAT and get cluster chain
     //      - traverse the cluster chain and read the data
@@ -46,22 +205,41 @@ impl Fat16Impl {
 
 impl FileSystem for Fat16 {
     fn read_dir(&self, path: &str) -> Result<Box<dyn Iterator<Item = Metadata> + Send>> {
-        // FIXME: read dir and return an iterator for all entries
-        todo!()
+        // read dir and return an iterator for all entries
+        let dir = self.handle.get_parent_dir(path)?;
+        let mut entries = Vec::new();
+
+        self.handle.get_directory_iter(&dir, |entry| {
+            entries.push(entry.as_meta());
+        })?;
+
+        Ok(Box::new(entries.into_iter()))
     }
 
     fn open_file(&self, path: &str) -> Result<FileHandle> {
-        // FIXME: open file and return a file handle
-        todo!()
+        // open file and return a file handle
+        let entry = self.handle.get_dir_entry(path)?;
+
+        if entry.is_directory() {
+            return Err(FsError::NotAFile);
+        }
+
+        let handle = self.handle.clone();
+        let meta = entry.as_meta();
+        let file = Box::new(File::new(handle, entry));
+
+        let file_handle = FileHandle::new(meta, file);
+
+        Ok(file_handle)
     }
 
     fn metadata(&self, path: &str) -> Result<Metadata> {
-        // FIXME: read metadata of the file / dir
-        todo!()
+        // read metadata of the file / dir
+        Ok(self.handle.get_dir_entry(path)?.as_meta())
     }
 
     fn exists(&self, path: &str) -> Result<bool> {
-        // FIXME: check if the file / dir exists
-        todo!()
+        // check if the file / dir exists
+        Ok(self.handle.get_dir_entry(path).is_ok())
     }
 }

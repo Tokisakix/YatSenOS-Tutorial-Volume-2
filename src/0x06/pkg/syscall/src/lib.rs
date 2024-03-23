@@ -9,6 +9,8 @@ pub mod macros;
 pub enum Syscall {
     Read = 0,
     Write = 1,
+    Open = 2,
+    Close = 3,
 
     GetPid = 39,
 
@@ -19,6 +21,7 @@ pub enum Syscall {
     Kill = 62,
 
     Time = 201,
+    ListDir = 327,
 
     Sem = 44326,
     

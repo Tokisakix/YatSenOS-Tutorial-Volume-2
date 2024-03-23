@@ -41,9 +41,9 @@ impl AtaDrive {
         // we only support PATA drives
         if let Ok(AtaDeviceType::Pata(res)) = BUSES[bus as usize].lock().identify_drive(drive) {
             let buf = res.map(u16::to_be_bytes).concat();
-            let serial = { /* FIXME: get the serial from buf */ };
-            let model = { /* FIXME: get the model from buf */ };
-            let blocks = { /* FIXME: get the block count from buf */ };
+            let serial = String::from_utf8_lossy(&buf[20..40]).trim().into();
+            let model = String::from_utf8_lossy(&buf[54..94]).trim().into();
+            let blocks = u32::from_be_bytes(buf[120..124].try_into().unwrap()).rotate_left(16);
             let ata_drive = Self {
                 bus,
                 drive,
@@ -62,9 +62,17 @@ impl AtaDrive {
     fn humanized_size(&self) -> (f32, &'static str) {
         let size = self.block_size();
         let count = self.block_count().unwrap();
-        let bytes = size * count;
+        let bytes: f32 = (size * count) as f32;
 
-        crate::humanized_size(bytes as u64)
+        if bytes < 1000f32 {
+            (bytes, "  B")
+        } else if (bytes / (1 << 10) as f32) < 1000f32 {
+            (bytes / (1 << 10) as f32, "KiB")
+        } else if (bytes / (1 << 20) as f32) < 1000f32 {
+            (bytes / (1 << 20) as f32, "MiB")
+        } else {
+            (bytes / (1 << 30) as f32, "GiB")
+        }
     }
 }
 
@@ -79,21 +87,23 @@ use storage::{Block512, BlockDevice};
 
 impl BlockDevice<Block512> for AtaDrive {
     fn block_count(&self) -> storage::Result<usize> {
-        // FIXME: return the block count
-        todo!()
+        // return the block count
+        Ok(self.blocks as usize)
     }
 
     fn read_block(&self, offset: usize, block: &mut Block512) -> storage::Result<()> {
-        // FIXME: read the block
+        // read the block
         //      - use `BUSES` and `self` to get bus
         //      - use `read_pio` to get data
-        todo!()
+        BUSES[self.bus as usize].lock()
+            .read_pio(self.drive, offset as u32, block.as_mut())
     }
 
     fn write_block(&self, offset: usize, block: &Block512) -> storage::Result<()> {
-        // FIXME: write the block
+        //  write the block
         //      - use `BUSES` and `self` to get bus
         //      - use `write_pio` to write data
-        todo!()
+        BUSES[self.bus as usize].lock()
+            .write_pio(self.drive, offset as u32, &block.as_ref())
     }
 }

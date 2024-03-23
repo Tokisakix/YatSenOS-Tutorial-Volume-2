@@ -89,7 +89,7 @@ mod tests {
     #[test]
     fn partition_test() {
         let data = hex_literal::hex!("80 01 01 00 0b fe bf fc 3f 00 00 00 7e 86 bb 00");
-
+        
         let meta = MbrPartition::parse(&data);
 
         println!("{:#?}", meta);

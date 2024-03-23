@@ -73,9 +73,9 @@ where
             return Err(FsError::InvalidOffset);
         }
 
-        // FIXME: calculate the block offset for inner device
-        // FIXME: read from the inner device
-        Ok(())
+        // calculate the block offset for inner device
+        // read from the inner device
+        self.inner.read_block(self.offset + offset, block)
     }
 
     fn write_block(&self, offset: usize, block: &B) -> Result<()> {
@@ -83,8 +83,8 @@ where
             return Err(FsError::InvalidOffset);
         }
 
-        // FIXME: calculate the block offset for inner device
-        // FIXME: write to the inner device
-        Ok(())
+        // calculate the block offset for inner device
+        // write to the inner device
+        self.inner.write_block(self.offset + offset, block)
     }
 }

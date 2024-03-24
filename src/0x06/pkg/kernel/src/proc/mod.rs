@@ -22,8 +22,6 @@ use alloc::string::{String, ToString};
 use x86_64::structures::idt::PageFaultErrorCode;
 use x86_64::VirtAddr;
 
-use crate::Resource;
-
 use self::sync::SemaphoreResult;
 
 // 0xffff_ff00_0000_0000 is the kernel's address space
@@ -119,10 +117,12 @@ pub fn wait_pid(pid: ProcessId) -> isize {
     x86_64::instructions::interrupts::without_interrupts(|| get_process_manager().wait_pid(pid))
 }
 
-pub fn handle(fd: u8) -> Option<Resource> {
-    x86_64::instructions::interrupts::without_interrupts(|| {
-        get_process_manager().current().read().handle(fd)
-    })
+pub fn read(fd: u8, buf: &mut [u8]) -> isize {
+    x86_64::instructions::interrupts::without_interrupts(|| get_process_manager().read(fd, buf))
+}
+
+pub fn write(fd: u8, buf: &[u8]) -> isize {
+    x86_64::instructions::interrupts::without_interrupts(|| get_process_manager().write(fd, buf))
 }
 
 pub fn close(fd: u8) -> bool {

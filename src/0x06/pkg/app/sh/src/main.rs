@@ -56,6 +56,19 @@ pub fn sh_cd(line : Vec<&str>, path : &mut String) {
     return;
 }
 
+pub fn sh_cat(line : Vec<&str>) {
+    let file_path = line[1];
+    let file = sys_open(file_path);
+    let mut buf = vec![0; 0x1000];
+    let size = sys_read(file, &mut buf).unwrap();
+    for ch in  buf.iter() {
+        print!("{}", *ch as char)
+    }
+    println!("Hello filesystem from <22331109>!");
+    sys_close(file);
+    return;
+}
+
 const HELP_INFO: &'static str = {
 r#"Shell by Tokisakix
 Usage:
@@ -81,6 +94,7 @@ fn main() -> isize {
         match line[0] {
             "ls" => sys_list_dir(path.as_str()),
             "cd" => sh_cd(line, &mut path),
+            "cat" => sh_cat(line),
             "exit" => break,
             "ps" => sys_stat(),
             "lsapp" => sys_list_app(),

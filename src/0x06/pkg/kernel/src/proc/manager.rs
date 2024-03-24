@@ -124,6 +124,16 @@ impl ProcessManager {
         pid
     }
 
+    #[inline]
+    pub fn read(&self, fd: u8, buf: &mut [u8]) -> isize {
+        self.current().read().read(fd, buf)
+    }
+
+    #[inline]
+    pub fn write(&self, fd: u8, buf: &[u8]) -> isize {
+        self.current().read().write(fd, buf)
+    }
+
     pub fn close(&self, fd: u8) -> bool {
         if fd < 3 {
             false // stdin, stdout, stderr are reserved

@@ -7,12 +7,7 @@ macro_rules! entry {
         #[export_name = "_start"]
         pub extern "C" fn __impl_start() {
             let ret = $fn();
-<<<<<<< HEAD
             lib::sys_exit(ret);
-=======
-            // FIXME: after syscall, add lib::sys_exit(ret);
-            loop {}
->>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
         }
     };
 }
@@ -21,11 +16,7 @@ macro_rules! entry {
 fn panic(info: &core::panic::PanicInfo) -> ! {
     let location = if let Some(location) = info.location() {
         alloc::format!(
-<<<<<<< HEAD
             "{}@{}:{}",
-=======
-            "{}:{}:{}",
->>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
             location.file(),
             location.line(),
             location.column()
@@ -40,10 +31,5 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
     };
     errln!("\n\n\rERROR: panicked at {}\n\n\r{}", location, msg);
 
-<<<<<<< HEAD
     crate::sys_exit(1);
-=======
-    // FIXME: after syscall, add lib::sys_exit(1);
-    loop {}
->>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
 }

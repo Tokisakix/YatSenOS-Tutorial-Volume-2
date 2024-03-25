@@ -5,12 +5,8 @@ pub struct ProcessId(pub u16);
 
 impl ProcessId {
     pub fn new() -> Self {
-<<<<<<< HEAD
         static NEXT_PID: AtomicU16 = AtomicU16::new(1); // pid 0 is reserved for no process
         ProcessId(NEXT_PID.fetch_add(1, Ordering::Relaxed))
-=======
-        // FIXME: Get a unique PID
->>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
     }
 }
 

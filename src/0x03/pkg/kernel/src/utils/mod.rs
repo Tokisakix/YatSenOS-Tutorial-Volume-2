@@ -1,8 +1,5 @@
-<<<<<<< HEAD
 mod uefi;
 
-=======
->>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
 #[macro_use]
 mod macros;
 #[macro_use]
@@ -14,12 +11,7 @@ pub mod logger;
 
 pub use macros::*;
 pub use regs::*;
-<<<<<<< HEAD
 use x86_64::instructions::interrupts;
-=======
-
-use crate::proc::*;
->>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
 
 pub const fn get_ascii_header() -> &'static str {
     concat!(
@@ -35,7 +27,6 @@ __  __      __  _____            ____  _____
     )
 }
 
-<<<<<<< HEAD
 pub const fn get_header() -> &'static str {
     concat!(">>> YatSenOS v", env!("CARGO_PKG_VERSION"))
 }
@@ -45,40 +36,5 @@ pub fn halt() {
     interrupts::enable_and_hlt();
     if disabled {
         interrupts::disable();
-=======
-pub fn new_test_thread(id: &str) -> ProcessId {
-    let proc_data = ProcessData::new();
-    proc_data.set_env("id", id);
-
-    spawn_kernel_thread(
-        utils::func::test,
-        format!("#{}_test", id),
-        Some(proc_data),
-    )
-}
-
-pub fn new_stack_test_thread() {
-    let pid = spawn_kernel_thread(
-        utils::func::stack_test,
-        alloc::string::String::from("stack"),
-        None,
-    );
-
-    // wait for progress exit
-    wait(pid);
-}
-
-fn wait(pid: ProcessId) {
-    loop {
-        // FIXME: try to get the status of the process
-
-        // HINT: it's better to use the exit code
-
-        if /* FIXME: is the process exited? */ {
-            x86_64::instructions::hlt();
-        } else {
-            break;
-        }
->>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
     }
 }

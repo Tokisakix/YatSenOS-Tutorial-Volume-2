@@ -31,12 +31,7 @@ impl PageTableContext {
         }
     }
 
-<<<<<<< HEAD
     pub fn clone(&self) -> Self {
-=======
-    /// Create a new page table object based on current page table.
-    pub fn clone_l4(&self) -> Self {
->>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
         // 1. alloc new page table
         let mut frame_alloc = crate::memory::get_frame_alloc_for_sure();
         let page_table_addr = frame_alloc
@@ -58,22 +53,14 @@ impl PageTableContext {
         }
     }
 
-<<<<<<< HEAD
     pub fn using_count(&self) -> usize {
         Arc::strong_count(&self.reg)
     }
 
-=======
-    /// Load the page table to Cr3 register.
->>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
     pub fn load(&self) {
         unsafe { Cr3::write(self.reg.addr, self.reg.flags) }
     }
 
-<<<<<<< HEAD
-=======
-    /// Get the page table object by Cr3 register value.
->>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
     pub fn mapper(&self) -> OffsetPageTable<'static> {
         unsafe {
             OffsetPageTable::new(
@@ -89,10 +76,7 @@ impl PageTableContext {
 impl core::fmt::Debug for PageTableContext {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("PageTable")
-<<<<<<< HEAD
             .field("ref", &self.using_count())
-=======
->>>>>>> 5e6e567754b757eb2bb7dc4d28e2a848efc12ef4
             .field("addr", &self.reg.addr)
             .field("flags", &self.reg.flags)
             .finish()

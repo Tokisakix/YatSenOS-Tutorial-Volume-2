@@ -59,9 +59,9 @@ pub enum ProgramStatus {
 
 /// init process manager
 pub fn init() {
-    let stack_bot = VirtAddr::new(KSTACK_INIT_BOT);
+    let stack_top = VirtAddr::new(KSTACK_INIT_BOT);
     let mut kproc_data = ProcessData::new();
-    kproc_data.set_stack(stack_bot, KSTACK_DEF_PAGE);
+    kproc_data.set_stack(stack_top, KSTACK_DEF_PAGE);
 
     trace!("Init process data: {:#?}", kproc_data);
 

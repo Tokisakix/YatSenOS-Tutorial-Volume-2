@@ -14,6 +14,7 @@ pub fn init() {
     info!("Opening disk device...");
 
     let drive = AtaDrive::open(0, 0).expect("Failed to open disk device");
+    MbrTable::parse(drive.clone());
 
     // only get the first partition
     let part = MbrTable::parse(drive)

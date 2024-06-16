@@ -64,8 +64,12 @@ pub fn sh_cat(line : Vec<&str>) {
     for ch in  buf.iter() {
         print!("{}", *ch as char)
     }
-    println!("Hello filesystem from <22331109>!");
     sys_close(file);
+    return;
+}
+
+pub fn sh_ls(path : String) {
+    sys_list_dir(path.as_str());
     return;
 }
 
@@ -92,7 +96,7 @@ fn main() -> isize {
         let input = stdin().read_line();
         let line: Vec<&str> = input.trim().split(' ').collect();
         match line[0] {
-            "ls" => sys_list_dir(path.as_str()),
+            "ls" => sh_ls(path.clone()),
             "cd" => sh_cd(line, &mut path),
             "cat" => sh_cat(line),
             "exit" => break,
